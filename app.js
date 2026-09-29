@@ -890,8 +890,17 @@
 
   function setViewport(width, save = true) {
     viewportWidth = Number(width) === 430 ? 430 : 390;
-    const stage = $('.device-stage');
-    if (stage) stage.style.width = `${viewportWidth}px`;
+
+    const workspace = $('.workspace');
+    const frame = editor.Canvas.getFrame?.();
+    if (frame) {
+      const canvasWidth = workspace?.clientWidth || window.innerWidth;
+      frame.set({
+        width: `${viewportWidth}px`,
+        x: Math.max(0, Math.round((canvasWidth - viewportWidth) / 2))
+      });
+    }
+
     const label = $('#deviceLabel');
     if (label) label.textContent = `${viewportWidth} px`;
     all('.device-switch button').forEach(btn => {
