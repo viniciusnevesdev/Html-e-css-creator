@@ -8,6 +8,7 @@
   let exportMode = 'html';
   let saveTimer = null;
   let previewing = false;
+  let sheetCollapsed = false;
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
   let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
 
@@ -189,7 +190,7 @@
       el = document.createElement('div');
       el.id = 'appFlash';
       Object.assign(el.style, {
-        position:'fixed', left:'50%', bottom:'calc(var(--sheet-h) + 12px)',
+        position:'fixed', left:'50%', bottom:'calc(var(--current-sheet-h, var(--sheet-h)) + 12px)',
         transform:'translateX(-50%)', zIndex:'90', background:'rgba(44,44,46,.96)',
         color:'#fff', padding:'9px 13px', borderRadius:'999px', fontSize:'12px',
         boxShadow:'0 8px 24px rgba(0,0,0,.35)', pointerEvents:'none',
@@ -216,13 +217,41 @@
 
   $$('.component-card').forEach(btn => btn.addEventListener('click', () => addComponent(btn.dataset.add)));
 
+  function setSheetCollapsed(collapsed) {
+    sheetCollapsed = Boolean(collapsed);
+    document.body.classList.toggle('sheet-collapsed', sheetCollapsed);
+    $('#sheet')?.classList.toggle('is-collapsed', sheetCollapsed);
+    requestAnimationFrame(() => {
+      syncCanvasSize();
+      editor.refresh();
+    });
+  }
+
+  function closeSheet() {
+    setSheetCollapsed(true);
+  }
+
+  function openSheet() {
+    setSheetCollapsed(false);
+  }
+
   function switchTab(name) {
-    $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
-    $$('.panel').forEach(x => x.classList.toggle('active', x.dataset.panel === name));
+    openSheet();
+    $('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+    $('.panel').forEach(x => x.classList.toggle('active', x.dataset.panel === name));
     if (name === 'layers') renderLayers();
     if (name === 'pages') renderPages();
   }
-  $$('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+  $('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  $('.panel-close').forEach(btn => btn.addEventListener('click', closeSheet));
+
+  $('.workspace')?.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('.device-toolbar')) return;
+    if (!target.closest('#gjs')) closeSheet();
+  });
 
   function labelFor(cmp) {
     const attrs = cmp.getAttributes ? cmp.getAttributes() : {};
@@ -609,6 +638,16 @@
     }
 
     bindGestureTarget(doc, frameWindow);
+
+    if (!doc.__uiBuilderBlankCloseBound) {
+      doc.__uiBuilderBlankCloseBound = true;
+      doc.addEventListener('click', event => {
+        const target = event.target;
+        if (!(target instanceof frameWindow.Element)) return;
+        if (target.closest('[data-ui]')) return;
+        closeSheet();
+      });
+    }
   }
 
   function lockInterfaceZoom() {
