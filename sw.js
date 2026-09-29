@@ -1,4 +1,4 @@
-const CACHE='ui-builder-v10';
+const CACHE='ui-builder-__BUILD_ID__';
 const LOCAL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./icon-180.png','./icon-512.png'];
 
 self.addEventListener('install',e=>{
