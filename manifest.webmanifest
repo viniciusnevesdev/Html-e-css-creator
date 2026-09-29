@@ -1,0 +1,14 @@
+{
+  "name": "UI Builder Mobile",
+  "short_name": "UI Builder",
+  "description": "Editor visual mobile-first para criar interfaces HTML/CSS no iPhone.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "orientation": "portrait",
+  "icons": [
+    {"src":"icon-180.png","sizes":"180x180","type":"image/png"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
