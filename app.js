@@ -893,6 +893,11 @@
     const available = Math.max(320, workspace.clientHeight || window.innerHeight);
     canvasHost.style.height = `${available}px`;
 
+    const frame = editor.Canvas.getFrame?.();
+    if (frame) {
+      frame.set({ height: `${available}px` });
+    }
+
     requestAnimationFrame(() => {
       editor.refresh();
       requestAnimationFrame(() => editor.refresh());
