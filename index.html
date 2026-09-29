@@ -180,6 +180,7 @@
           <div id="pagesList" class="pages-list"></div>
           <div class="section-title">Projeto</div>
           <div class="action-row">
+            <button id="importBtn">Importar código</button>
             <button id="saveBtn">Salvar local</button>
             <button id="resetBtn" class="danger-soft">Limpar projeto</button>
           </div>
@@ -224,6 +225,22 @@
       <div class="action-row">
         <button id="copyExport">Copiar</button>
         <button id="downloadExport">Baixar arquivo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="importModal">
+    <div class="modal-card import-modal-card">
+      <div class="modal-head"><h2>Importar código</h2><button class="icon-btn" id="closeImport" aria-label="Fechar">×</button></div>
+      <div class="segmented import-tabs">
+        <button class="active" data-import-tab="html">HTML</button>
+        <button data-import-tab="css">CSS</button>
+      </div>
+      <p class="import-help" id="importHelp">Cole um HTML completo ou um trecho. O conteúdo da página atual será substituído.</p>
+      <textarea id="importCode" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Cole seu código HTML aqui…"></textarea>
+      <div class="action-row import-actions">
+        <label class="file-import-btn">Escolher arquivo<input id="importFile" type="file" accept=".html,.htm,.css,text/html,text/css" /></label>
+        <button id="applyImport">Importar e editar</button>
       </div>
     </div>
   </div>
