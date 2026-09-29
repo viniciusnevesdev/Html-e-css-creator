@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="UI Builder" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="stylesheet" href="https://unpkg.com/grapesjs@0.22.12/dist/css/grapes.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>UI Builder Mobile</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-group">
+        <button class="icon-btn" id="undoBtn" aria-label="Desfazer">↶</button>
+        <button class="icon-btn" id="redoBtn" aria-label="Refazer">↷</button>
+      </div>
+      <button class="page-pill" id="pageTitleBtn">Página 1</button>
+      <div class="topbar-group">
+        <button class="icon-btn" id="previewBtn" aria-label="Pré-visualizar">◉</button>
+        <button class="icon-btn" id="exportBtn" aria-label="Exportar">⇧</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <div class="device-stage">
+        <div class="device-label">390 px</div>
+        <div id="gjs"></div>
+      </div>
+    </main>
+
+    <section class="sheet" id="sheet">
+      <div class="grabber"></div>
+      <div class="sheet-content">
+        <div class="panel active" data-panel="add">
+          <h2>Adicionar</h2>
+          <div class="component-grid">
+            <button class="component-card" data-add="container-v"><span>↕</span><b>Container vertical</b></button>
+            <button class="component-card" data-add="container-h"><span>↔</span><b>Container horizontal</b></button>
+            <button class="component-card" data-add="overlay"><span>▣</span><b>Sobreposição</b></button>
+            <button class="component-card" data-add="text"><span>Aa</span><b>Texto</b></button>
+            <button class="component-card" data-add="button"><span>▭</span><b>Botão</b></button>
+            <button class="component-card" data-add="image"><span>▧</span><b>Imagem</b></button>
+            <button class="component-card" data-add="spacer"><span>↕</span><b>Spacer</b></button>
+            <button class="component-card" data-add="divider"><span>—</span><b>Divisor</b></button>
+          </div>
+        </div>
+
+        <div class="panel" data-panel="layers">
+          <div class="panel-head"><h2>Camadas</h2><button class="mini-btn" id="refreshLayers">Atualizar</button></div>
+          <div id="layersTree" class="layers-tree"></div>
+        </div>
+
+        <div class="panel" data-panel="style">
+          <div class="panel-head"><h2>Propriedades</h2><span id="selectedLabel" class="selected-label">Nada selecionado</span></div>
+          <div id="inspectorEmpty" class="empty-state">Toque em um elemento na tela para editar.</div>
+          <div id="inspector" class="inspector hidden">
+            <label class="field full-field" id="textFieldWrap">
+              <span>Texto</span>
+              <input id="textValue" type="text" autocomplete="off" />
+            </label>
+
+            <div class="section-title">Layout</div>
+            <div class="segmented" id="widthMode">
+              <button data-value="full">Full</button><button data-value="fit">Fit</button><button data-value="fixed">Fixo</button>
+            </div>
+            <label class="field" id="widthValueWrap"><span>Largura</span><input id="widthValue" type="number" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Altura</span><input id="heightValue" type="text" placeholder="auto ou 120" /></label>
+            <label class="field"><span>Gap</span><input id="gapValue" type="number" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Padding</span><input id="paddingValue" type="number" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Margin</span><input id="marginValue" type="number" min="0" inputmode="decimal" /></label>
+
+            <label class="field full-field"><span>Direção</span>
+              <select id="directionValue"><option value="column">Vertical</option><option value="row">Horizontal</option><option value="overlay">Sobreposição</option></select>
+            </label>
+            <label class="field"><span>Alinhar</span>
+              <select id="alignValue"><option value="stretch">Esticar</option><option value="flex-start">Início</option><option value="center">Centro</option><option value="flex-end">Fim</option></select>
+            </label>
+            <label class="field"><span>Distribuir</span>
+              <select id="justifyValue"><option value="flex-start">Início</option><option value="center">Centro</option><option value="flex-end">Fim</option><option value="space-between">Espaçar</option></select>
+            </label>
+
+            <div class="section-title">Aparência</div>
+            <label class="field"><span>Fundo</span><input id="backgroundValue" type="color" value="#ffffff" /></label>
+            <label class="field"><span>Texto</span><input id="colorValue" type="color" value="#ffffff" /></label>
+            <label class="field"><span>Borda</span><input id="borderWidthValue" type="number" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Cor borda</span><input id="borderColorValue" type="color" value="#8e8e93" /></label>
+            <label class="field"><span>Raio</span><input id="radiusValue" type="number" min="0" inputmode="decimal" /></label>
+            <label class="field"><span>Opacidade %</span><input id="opacityValue" type="number" min="0" max="100" inputmode="decimal" /></label>
+            <label class="field full-field"><span>Overflow</span>
+              <select id="overflowValue"><option value="visible">Visível</option><option value="hidden">Recortar</option><option value="auto">Scroll automático</option></select>
+            </label>
+
+            <div class="section-title">Organização</div>
+            <div class="action-row">
+              <button id="moveUpBtn">↑ Subir</button>
+              <button id="moveDownBtn">↓ Descer</button>
+              <button id="duplicateBtn">Duplicar</button>
+              <button class="danger" id="deleteBtn">Excluir</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" data-panel="pages">
+          <div class="panel-head"><h2>Páginas</h2><button class="mini-btn" id="addPageBtn">+ Nova</button></div>
+          <div id="pagesList" class="pages-list"></div>
+          <div class="section-title">Projeto</div>
+          <div class="action-row">
+            <button id="saveBtn">Salvar local</button>
+            <button id="resetBtn" class="danger-soft">Limpar projeto</button>
+          </div>
+        </div>
+      </div>
+
+      <nav class="tabs">
+        <button class="tab active" data-tab="add"><span>＋</span>Adicionar</button>
+        <button class="tab" data-tab="layers"><span>▱</span>Camadas</button>
+        <button class="tab" data-tab="style"><span>☷</span>Estilo</button>
+        <button class="tab" data-tab="pages"><span>▤</span>Páginas</button>
+      </nav>
+    </section>
+  </div>
+
+  <div class="modal hidden" id="exportModal">
+    <div class="modal-card">
+      <div class="modal-head"><h2>Exportar</h2><button class="icon-btn" id="closeExport">×</button></div>
+      <div class="segmented export-tabs"><button class="active" data-export-tab="html">HTML</button><button data-export-tab="css">CSS</button></div>
+      <textarea id="exportCode" spellcheck="false"></textarea>
+      <div class="action-row">
+        <button id="copyExport">Copiar</button>
+        <button id="downloadExport">Baixar arquivo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/grapesjs@0.22.12/dist/grapes.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
