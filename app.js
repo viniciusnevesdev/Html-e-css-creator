@@ -2,7 +2,7 @@
   const STORAGE_KEY = 'mobile-ui-builder-project-v1';
   const VIEWPORT_KEY = 'mobile-ui-builder-viewport-v1';
   const $ = (s) => document.querySelector(s);
-  const $ = (s) => [...document.querySelectorAll(s)];
+  const $$ = (s) => [...document.querySelectorAll(s)];
   let selected = null;
   let exportMode = 'html';
   let saveTimer = null;
