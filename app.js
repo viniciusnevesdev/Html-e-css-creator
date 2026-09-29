@@ -9,7 +9,7 @@
   let saveTimer = null;
   let previewing = false;
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
-  let canvasZoom = Math.max(40, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
+  let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
 
   const editor = grapesjs.init({
     container: '#gjs',
@@ -415,7 +415,7 @@
   $('#refreshLayers').addEventListener('click',renderLayers);
 
   function clampZoom(value) {
-    return Math.max(40, Math.min(200, Math.round(Number(value) || 100)));
+    return Math.max(20, Math.min(200, Math.round(Number(value) || 100)));
   }
 
   function updateZoomUi() {
