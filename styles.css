@@ -27,7 +27,7 @@ button{color:inherit}
 .update-banner button{border:0;background:var(--accent);color:#fff;font-weight:700;font-size:11px;border-radius:9px;padding:7px 10px;flex:0 0 auto}
 .update-banner button:disabled{opacity:.65}
 .workspace{position:absolute;inset:0 0 var(--current-sheet-h);overflow:hidden;background:#0b0b0d;padding:0;display:block;transition:bottom .22s ease;touch-action:none;overscroll-behavior:none}
-.device-stage{width:390px;height:100%;position:relative;margin:0 auto;max-width:none}
+.device-stage{width:100%;height:100%;position:relative;margin:0;max-width:none}
 .device-toolbar{position:absolute;z-index:24;top:calc(54px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);height:28px;display:flex;align-items:center;justify-content:center;gap:6px;margin:0;user-select:none;-webkit-user-select:none}
 .device-label{font-size:10px;color:var(--muted);min-width:38px;text-align:right}
 .device-switch,.zoom-control{display:flex;background:var(--surface-2);padding:2px;border-radius:9px;gap:1px}
