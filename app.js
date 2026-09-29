@@ -1,30 +1,25 @@
 (() => {
   const STORAGE_KEY = 'mobile-ui-builder-project-v1';
+  const VIEWPORT_KEY = 'mobile-ui-builder-viewport-v1';
   const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
+  const $ = (s) => [...document.querySelectorAll(s)];
   let selected = null;
   let exportMode = 'html';
   let saveTimer = null;
+  let previewing = false;
+  let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
 
   const editor = grapesjs.init({
     container: '#gjs',
-    height: '100%',
+    height: '740px',
     width: 'auto',
     fromElement: false,
     storageManager: false,
     panels: { defaults: [] },
     noticeOnUnload: false,
     selectorManager: { componentFirst: true },
-    canvas: { styles: [], scripts: [] },
-    deviceManager: {
-      devices: [
-        { id: 'iphone390', name: 'iPhone 390', width: '390px' },
-        { id: 'iphone430', name: 'iPhone 430', width: '430px' }
-      ]
-    }
+    canvas: { styles: [], scripts: [] }
   });
-
-  editor.Devices.select('iphone390');
 
   const initialHtml = `
     <main class="page-root">
@@ -52,23 +47,83 @@
     .ui-overlay{display:grid;width:100%;min-height:160px}.ui-overlay>*{grid-area:1/1}
   `;
 
+  function flattenLegacy390Media(css) {
+    if (!css || !css.includes('max-width: 390px')) return css;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+    let output = '';
+    try {
+      [...style.sheet.cssRules].forEach(rule => {
+        if (rule.type === CSSRule.MEDIA_RULE && /max-width\s*:\s*390px/i.test(rule.conditionText || '')) {
+          output += [...rule.cssRules].map(inner => inner.cssText).join('\n') + '\n';
+        } else {
+          output += rule.cssText + '\n';
+        }
+      });
+    } catch (error) {
+      console.warn('Não foi possível migrar estilos antigos de 390 px', error);
+      return css;
+    } finally {
+      style.remove();
+    }
+    return output.trim();
+  }
+
+  function migrateUiAttributes() {
+    const root = editor.Pages.getSelected()?.getMainComponent?.();
+    if (!root) return;
+    const walk = cmp => {
+      cmp.components?.().each(child => {
+        const attrs = child.getAttributes?.() || {};
+        if (!attrs['data-ui']) {
+          const classes = (child.getClasses?.() || []).join(' ');
+          if (/\bui-text\b/.test(classes)) child.addAttributes({'data-ui':'text'});
+          else if (/\bui-button\b/.test(classes)) child.addAttributes({'data-ui':'button'});
+          else if (/\bui-image\b/.test(classes)) child.addAttributes({'data-ui':'image'});
+          else if (/\bui-spacer\b/.test(classes)) child.addAttributes({'data-ui':'spacer'});
+          else if (/\bui-divider\b/.test(classes)) child.addAttributes({'data-ui':'divider'});
+        }
+        walk(child);
+      });
+    };
+    walk(root);
+  }
+
+  function normalizeLoadedProject() {
+    const css = editor.getCss();
+    const migrated = flattenLegacy390Media(css);
+    if (migrated && migrated !== css) editor.setStyle(migrated);
+    migrateUiAttributes();
+  }
+
   function loadProject() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
-        editor.loadProjectData(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        editor.loadProjectData(parsed.project || parsed);
+        const pages = editor.Pages.getAll();
+        const requestedId = parsed.activePageId;
+        const requested = requestedId ? pages.find(page => page.get('id') === requestedId) : null;
+        editor.Pages.select(requested || editor.Pages.getSelected() || pages[0]);
+        normalizeLoadedProject();
         return;
       } catch (e) { console.warn('Falha ao restaurar projeto', e); }
     }
     const pages = editor.Pages;
     const first = pages.getSelected() || pages.getAll()[0];
+    editor.Pages.select(first);
     const cmp = first.getMainComponent();
     cmp.components(initialHtml);
     editor.setStyle(initialCss);
   }
 
   function persist(showFeedback = false) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(editor.getProjectData()));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      project: editor.getProjectData(),
+      activePageId: editor.Pages.getSelected()?.get('id') || null
+    }));
     if (showFeedback) {
       const btn = $('#saveBtn');
       const prev = btn.textContent;
@@ -87,7 +142,7 @@
   const addTemplates = {
     'container-v': `<div class="ui-container" data-ui="container-v" style="display:flex;flex-direction:column;gap:12px;width:100%;min-height:100px;padding:12px;border:1px dashed #3a3a3c;border-radius:16px"></div>`,
     'container-h': `<div class="ui-container" data-ui="container-h" style="display:flex;flex-direction:row;gap:12px;width:100%;min-height:80px;padding:12px;border:1px dashed #3a3a3c;border-radius:16px"></div>`,
-    'overlay': `<div class="ui-overlay" data-ui="overlay" style="display:grid;width:100%;min-height:160px"><div class="ui-card" style="grid-area:1/1;background:#222;border-radius:20px"></div><div class="ui-text" style="grid-area:1/1;align-self:center;justify-self:center">Sobreposição</div></div>`,
+    'overlay': `<div class="ui-overlay" data-ui="overlay" style="display:grid;width:100%;min-height:160px"><div class="ui-card" style="grid-area:1/1;background:#222;border-radius:20px"></div><div class="ui-text" data-ui="text" style="grid-area:1/1;align-self:center;justify-self:center">Sobreposição</div></div>`,
     'text': `<div class="ui-text" data-ui="text" style="font-size:20px">Texto</div>`,
     'button': `<div class="ui-button" data-ui="button">Botão</div>`,
     'image': `<div class="ui-image" data-ui="image">Imagem</div>`,
@@ -106,9 +161,23 @@
 
   function targetContainer() {
     if (!selected) return defaultPageContainer();
+
     const ui = selected.getAttributes?.()?.['data-ui'];
     if (['container-v','container-h','overlay'].includes(ui)) return selected;
-    return selected.parent?.() || defaultPageContainer();
+
+    const tag = String(selected.get?.('tagName') || '').toLowerCase();
+    const type = String(selected.get?.('type') || '').toLowerCase();
+    if (tag === 'main' || tag === 'body' || type === 'wrapper') {
+      const nested = selected.find?.('[data-ui="container-v"], [data-ui="container-h"]') || [];
+      return nested[0] || (tag === 'main' ? selected : defaultPageContainer());
+    }
+
+    const parent = selected.parent?.();
+    if (!parent) return defaultPageContainer();
+    const parentTag = String(parent.get?.('tagName') || '').toLowerCase();
+    const parentType = String(parent.get?.('type') || '').toLowerCase();
+    if (parentTag === 'body' || parentType === 'wrapper') return defaultPageContainer();
+    return parent;
   }
 
   function flash(message) {
@@ -180,18 +249,29 @@
     tree.innerHTML = '';
     const root = editor.Pages.getSelected()?.getMainComponent();
     if (!root) return;
+
     const walk = (cmp, depth) => {
       cmp.components().each(child => {
-        const row = document.createElement('button');
-        row.className = 'layer-row' + (selected === child ? ' selected' : '');
-        row.style.paddingLeft = `${10 + depth * 16}px`;
-        row.innerHTML = `<span class="layer-icon">${iconFor(child)}</span><span class="layer-name"></span>`;
-        row.querySelector('.layer-name').textContent = labelFor(child);
-        row.addEventListener('click', () => { editor.select(child); switchTab('style'); });
-        tree.appendChild(row);
-        if (child.components().length) walk(child, depth + 1);
+        const attrs = child.getAttributes?.() || {};
+        const type = String(child.get?.('type') || '').toLowerCase();
+        const show = Boolean(attrs['data-ui']);
+
+        if (show) {
+          const row = document.createElement('button');
+          row.className = 'layer-row' + (selected === child ? ' selected' : '');
+          row.style.paddingLeft = `${10 + depth * 16}px`;
+          row.innerHTML = `<span class="layer-icon">${iconFor(child)}</span><span class="layer-name"></span>`;
+          row.querySelector('.layer-name').textContent = labelFor(child);
+          row.addEventListener('click', () => { editor.select(child); switchTab('style'); });
+          tree.appendChild(row);
+        }
+
+        if (type !== 'textnode' && child.components?.().length) {
+          walk(child, show ? depth + 1 : depth);
+        }
       });
     };
+
     walk(root, 0);
     if (!tree.children.length) tree.innerHTML = '<div class="empty-state">Esta página está vazia.</div>';
   }
@@ -331,13 +411,57 @@
   $('#redoBtn').addEventListener('click',()=>editor.UndoManager.redo());
   $('#refreshLayers').addEventListener('click',renderLayers);
 
-  let previewing=false;
+  function syncCanvasSize() {
+    const canvasHost = $('#gjs');
+    if (!canvasHost) return;
+
+    if (previewing) {
+      const topbarHeight = $('.topbar')?.getBoundingClientRect().height || 58;
+      const available = Math.max(320, window.innerHeight - topbarHeight - 68);
+      canvasHost.style.height = `${available}px`;
+    } else {
+      canvasHost.style.height = '740px';
+    }
+
+    requestAnimationFrame(() => {
+      editor.refresh();
+      requestAnimationFrame(() => editor.refresh());
+    });
+  }
+
+  function setViewport(width, save = true) {
+    viewportWidth = Number(width) === 430 ? 430 : 390;
+    const stage = $('.device-stage');
+    if (stage) stage.style.width = `${viewportWidth}px`;
+    const label = $('#deviceLabel');
+    if (label) label.textContent = `${viewportWidth} px`;
+    $('.device-switch button').forEach(btn => {
+      btn.classList.toggle('active', Number(btn.dataset.viewport) === viewportWidth);
+    });
+    if (save) localStorage.setItem(VIEWPORT_KEY, String(viewportWidth));
+    requestAnimationFrame(() => editor.refresh());
+  }
+
+  $('.device-switch button').forEach(btn => {
+    btn.addEventListener('click', () => setViewport(Number(btn.dataset.viewport)));
+  });
+
   $('#previewBtn').addEventListener('click',()=>{
     previewing=!previewing;
     document.body.classList.toggle('previewing',previewing);
     $('#previewBtn').textContent=previewing?'✕':'◉';
     try { previewing ? editor.runCommand('preview') : editor.stopCommand('preview'); } catch(e){}
+    syncCanvasSize();
   });
+
+  window.addEventListener('resize', syncCanvasSize);
+
+  function pageDisplayName(page) {
+    if (!page) return 'Página';
+    const pages = editor.Pages.getAll();
+    const index = Math.max(0, pages.indexOf(page));
+    return page.get('name') || `Página ${index + 1}`;
+  }
 
   function renderPages() {
     const list=$('#pagesList'); list.innerHTML='';
@@ -350,11 +474,30 @@
       row.querySelector('.layer-name').addEventListener('click',()=>{editor.Pages.select(page); updatePageTitle(); renderPages();});
       const buttons=row.querySelectorAll('button');
       buttons[0].addEventListener('click',()=>{const n=prompt('Nome da página',name); if(n){page.set('name',n.trim()); updatePageTitle(); renderPages(); persist();}});
-      buttons[1].addEventListener('click',()=>{if(pages.length<=1){alert('O projeto precisa ter pelo menos uma página.');return;} if(confirm(`Excluir “${name}”?`)){editor.Pages.remove(page); updatePageTitle(); renderPages(); persist();}});
+      buttons[1].addEventListener('click',()=>{
+        const all = editor.Pages.getAll();
+        if(all.length<=1){alert('O projeto precisa ter pelo menos uma página.');return;}
+        if(!confirm(`Excluir “${name}”?`)) return;
+
+        const index = all.indexOf(page);
+        const wasActive = page === editor.Pages.getSelected();
+        const fallback = all[index - 1] || all[index + 1];
+
+        if (wasActive && fallback) editor.Pages.select(fallback);
+        editor.Pages.remove(page);
+        if (wasActive && fallback) editor.Pages.select(fallback);
+
+        selected = null;
+        updatePageTitle();
+        refreshInspector();
+        renderLayers();
+        renderPages();
+        persist();
+      });
       list.appendChild(row);
     });
   }
-  function updatePageTitle(){ const p=editor.Pages.getSelected(); $('#pageTitleBtn').textContent=p?.get('name')||'Página'; }
+  function updatePageTitle(){ $('#pageTitleBtn').textContent=pageDisplayName(editor.Pages.getSelected()); }
   $('#addPageBtn').addEventListener('click',()=>{
     const count=editor.Pages.getAll().length+1;
     const page=editor.Pages.add({id:`page-${Date.now()}`,name:`Página ${count}`,component:`<main class="page-root"><section class="ui-container" data-ui="container-v"></section></main>`});
@@ -366,7 +509,29 @@
   $('#saveBtn').addEventListener('click',()=>persist(true));
   $('#resetBtn').addEventListener('click',()=>{ if(confirm('Apagar o projeto salvo e recomeçar?')){localStorage.removeItem(STORAGE_KEY);location.reload();} });
 
-  function currentExport(){ return exportMode==='html'?editor.getHtml():editor.getCss(); }
+  function exportCss(){ return editor.getCss(); }
+
+  function exportHtmlDocument() {
+    const raw = editor.getHtml();
+    const match = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    const body = match ? match[1] : raw;
+    const css = exportCss();
+    return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+${css}
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+  }
+
+  function currentExport(){ return exportMode==='html'?exportHtmlDocument():exportCss(); }
   function refreshExport(){ $('#exportCode').value=currentExport(); }
   $('#exportBtn').addEventListener('click',()=>{ $('#exportModal').classList.remove('hidden'); refreshExport(); });
   $('#closeExport').addEventListener('click',()=>$('#exportModal').classList.add('hidden'));
@@ -381,7 +546,23 @@
     const ext=exportMode==='html'?'html':'css'; const blob=new Blob([currentExport()],{type:exportMode==='html'?'text/html':'text/css'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`pagina.${ext}`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   });
 
+  setViewport(viewportWidth, false);
   renderLayers(); renderPages(); updatePageTitle(); refreshInspector();
+  syncCanvasSize();
+
+  editor.on('load', () => {
+    setViewport(viewportWidth, false);
+    updatePageTitle();
+    renderPages();
+    renderLayers();
+    syncCanvasSize();
+  });
+
+  requestAnimationFrame(() => {
+    updatePageTitle();
+    syncCanvasSize();
+  });
+
   flash('Editor pronto');
 
   if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
