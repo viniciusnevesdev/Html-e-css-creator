@@ -1,6 +1,7 @@
 (() => {
   const STORAGE_KEY = 'mobile-ui-builder-project-v1';
   const VIEWPORT_KEY = 'mobile-ui-builder-viewport-v1';
+  const ZOOM_KEY = 'mobile-ui-builder-zoom-v1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   let selected = null;
@@ -8,6 +9,7 @@
   let saveTimer = null;
   let previewing = false;
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
+  let canvasZoom = Math.max(40, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
 
   const editor = grapesjs.init({
     container: '#gjs',
@@ -412,6 +414,100 @@
   $('#redoBtn').addEventListener('click',()=>editor.UndoManager.redo());
   $('#refreshLayers').addEventListener('click',renderLayers);
 
+  function clampZoom(value) {
+    return Math.max(40, Math.min(200, Math.round(Number(value) || 100)));
+  }
+
+  function updateZoomUi() {
+    const value = $('#zoomValue');
+    if (value) value.textContent = `${Math.round(canvasZoom)}%`;
+  }
+
+  function setCanvasZoom(value, save = true) {
+    canvasZoom = clampZoom(value);
+    editor.Canvas.setZoom(canvasZoom);
+    updateZoomUi();
+    if (save) localStorage.setItem(ZOOM_KEY, String(canvasZoom));
+  }
+
+  function touchDistance(a, b) {
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  function bindCanvasPinch(frameWindow) {
+    if (!frameWindow || frameWindow.__uiBuilderPinchBound) return;
+    frameWindow.__uiBuilderPinchBound = true;
+
+    const doc = frameWindow.document;
+    let pinching = false;
+    let startDistance = 0;
+    let startZoom = canvasZoom;
+
+    const begin = event => {
+      if (!event.touches || event.touches.length < 2) return;
+      pinching = true;
+      startDistance = touchDistance(event.touches[0], event.touches[1]);
+      startZoom = editor.Canvas.getZoom() || canvasZoom;
+      event.preventDefault();
+    };
+
+    const move = event => {
+      if (!pinching || !event.touches || event.touches.length < 2) return;
+      event.preventDefault();
+      const distance = touchDistance(event.touches[0], event.touches[1]);
+      if (!startDistance) return;
+      setCanvasZoom(startZoom * (distance / startDistance), false);
+    };
+
+    const end = event => {
+      if (!pinching) return;
+      if (event.touches && event.touches.length >= 2) return;
+      pinching = false;
+      setCanvasZoom(canvasZoom, true);
+    };
+
+    doc.addEventListener('touchstart', begin, { passive: false });
+    doc.addEventListener('touchmove', move, { passive: false });
+    doc.addEventListener('touchend', end, { passive: false });
+    doc.addEventListener('touchcancel', end, { passive: false });
+
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(name => {
+      doc.addEventListener(name, event => event.preventDefault(), { passive: false });
+    });
+  }
+
+  function lockInterfaceZoom() {
+    const blockGesture = event => event.preventDefault();
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(name => {
+      document.addEventListener(name, blockGesture, { passive: false });
+    });
+
+    document.addEventListener('touchmove', event => {
+      if (event.touches && event.touches.length > 1) event.preventDefault();
+    }, { passive: false });
+  }
+
+  $('#zoomOutBtn')?.addEventListener('click', () => setCanvasZoom(canvasZoom - 10));
+  $('#zoomInBtn')?.addEventListener('click', () => setCanvasZoom(canvasZoom + 10));
+  $('#zoomValue')?.addEventListener('click', () => setCanvasZoom(100));
+
+  editor.on('canvas:zoom', () => {
+    const current = editor.Canvas.getZoom();
+    if (Number.isFinite(current)) {
+      canvasZoom = clampZoom(current);
+      updateZoomUi();
+    }
+  });
+
+  editor.on('canvas:frame:load', ({ window }) => {
+    bindCanvasPinch(window);
+    setCanvasZoom(canvasZoom, false);
+  });
+
+  lockInterfaceZoom();
+
   function syncCanvasSize() {
     const canvasHost = $('#gjs');
     if (!canvasHost) return;
@@ -557,11 +653,17 @@ ${body}
     renderPages();
     renderLayers();
     syncCanvasSize();
+    updateZoomUi();
+    setCanvasZoom(canvasZoom, false);
+    bindCanvasPinch(editor.Canvas.getWindow?.());
   });
 
   requestAnimationFrame(() => {
     updatePageTitle();
     syncCanvasSize();
+    updateZoomUi();
+    setCanvasZoom(canvasZoom, false);
+    bindCanvasPinch(editor.Canvas.getWindow?.());
   });
 
   flash('Editor pronto');
