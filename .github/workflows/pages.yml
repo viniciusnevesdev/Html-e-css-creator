@@ -29,6 +29,30 @@ jobs:
         with:
           enablement: true
 
+      - name: Stamp build version
+        env:
+          BUILD_ID: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          build = os.environ["BUILD_ID"]
+
+          for filename in ("index.html", "sw.js"):
+              path = Path(filename)
+              content = path.read_text(encoding="utf-8")
+              if "__BUILD_ID__" not in content:
+                  raise SystemExit(f"Missing __BUILD_ID__ placeholder in {filename}")
+              path.write_text(content.replace("__BUILD_ID__", build), encoding="utf-8")
+
+          Path("version.json").write_text(
+              json.dumps({"build": build}) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
