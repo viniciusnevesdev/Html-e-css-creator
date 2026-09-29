@@ -11,8 +11,9 @@
   <link rel="apple-touch-icon" href="icon-180.png" />
   <link id="gjsCss" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/css/grapes.min.css"
         onerror="this.onerror=null;this.href='https://unpkg.com/grapesjs@0.22.12/dist/css/grapes.min.css'" />
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=__BUILD_ID__" />
   <title>UI Builder Mobile</title>
+  <script>window.__APP_BUILD__='__BUILD_ID__';</script>
 </head>
 <body>
   <div id="app">
@@ -37,6 +38,11 @@
         <button class="icon-btn" id="exportBtn" aria-label="Exportar">⇧</button>
       </div>
     </header>
+
+    <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
+      <span>Há uma versão mais atual disponível.</span>
+      <button type="button" id="applyUpdateBtn">Atualizar</button>
+    </div>
 
     <main class="workspace">
       <div class="device-stage">
@@ -218,7 +224,7 @@
 
       const loadApp = () => {
         const app = document.createElement('script');
-        app.src = './app.js?v=12';
+        app.src = './app.js?v=__BUILD_ID__';
         app.onerror = showError;
         document.body.appendChild(app);
       };
