@@ -95,11 +95,40 @@
     'divider': `<div class="ui-divider" data-ui="divider"></div>`
   };
 
+  function defaultPageContainer() {
+    const page = editor.Pages.getSelected();
+    const root = page?.getMainComponent?.();
+    if (!root) return editor.getWrapper();
+
+    const candidates = root.find?.('[data-ui="container-v"], [data-ui="container-h"]') || [];
+    return candidates[0] || root.components?.().at?.(0)?.components?.().at?.(0) || root;
+  }
+
   function targetContainer() {
-    if (!selected) return editor.getWrapper();
-    const ui = selected.getAttributes()?.['data-ui'];
+    if (!selected) return defaultPageContainer();
+    const ui = selected.getAttributes?.()?.['data-ui'];
     if (['container-v','container-h','overlay'].includes(ui)) return selected;
-    return selected.parent() || editor.getWrapper();
+    return selected.parent?.() || defaultPageContainer();
+  }
+
+  function flash(message) {
+    let el = document.getElementById('appFlash');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'appFlash';
+      Object.assign(el.style, {
+        position:'fixed', left:'50%', bottom:'calc(var(--sheet-h) + 12px)',
+        transform:'translateX(-50%)', zIndex:'90', background:'rgba(44,44,46,.96)',
+        color:'#fff', padding:'9px 13px', borderRadius:'999px', fontSize:'12px',
+        boxShadow:'0 8px 24px rgba(0,0,0,.35)', pointerEvents:'none',
+        opacity:'0', transition:'opacity .16s ease'
+      });
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.style.opacity = '1';
+    clearTimeout(flash._t);
+    flash._t = setTimeout(() => { el.style.opacity = '0'; }, 900);
   }
 
   function addComponent(type) {
@@ -109,6 +138,8 @@
     editor.select(cmp);
     switchTab('style');
     renderLayers();
+    schedulePersist();
+    flash('Elemento adicionado');
   }
 
   $$('.component-card').forEach(btn => btn.addEventListener('click', () => addComponent(btn.dataset.add)));
@@ -351,6 +382,7 @@
   });
 
   renderLayers(); renderPages(); updatePageTitle(); refreshInspector();
+  flash('Editor pronto');
 
   if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 })();
