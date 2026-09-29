@@ -901,7 +901,9 @@
   $('#previewBtn').addEventListener('click',()=>{
     previewing=!previewing;
     document.body.classList.toggle('previewing',previewing);
-    $('#previewBtn').textContent=previewing?'✕':'◉';
+    $('#previewBtn').classList.toggle('active', previewing);
+    $('#previewBtn').setAttribute('aria-pressed', String(previewing));
+    $('#previewBtn').setAttribute('aria-label', previewing ? 'Sair da pré-visualização' : 'Pré-visualizar');
     try { previewing ? editor.runCommand('preview') : editor.stopCommand('preview'); } catch(e){}
     syncCanvasSize();
   });
