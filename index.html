@@ -9,7 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="UI Builder" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icon-180.png" />
-  <link rel="stylesheet" href="https://unpkg.com/grapesjs@0.22.12/dist/css/grapes.min.css" />
+  <link id="gjsCss" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/css/grapes.min.css"
+        onerror="this.onerror=null;this.href='https://unpkg.com/grapesjs@0.22.12/dist/css/grapes.min.css'" />
   <link rel="stylesheet" href="styles.css" />
   <title>UI Builder Mobile</title>
 </head>
@@ -138,7 +139,41 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/grapesjs@0.22.12/dist/grapes.min.js"></script>
-  <script src="app.js"></script>
+  <script>
+    (() => {
+      const sources = [
+        'https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/grapes.min.js',
+        'https://unpkg.com/grapesjs@0.22.12/dist/grapes.min.js'
+      ];
+      let index = 0;
+
+      const showError = () => {
+        const box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:90px 16px auto;z-index:200;background:#2c2c2e;color:#fff;padding:16px;border-radius:16px;font:14px -apple-system,BlinkMacSystemFont,sans-serif';
+        box.textContent = 'Não foi possível carregar o motor do editor. Verifique a conexão e recarregue a página.';
+        document.body.appendChild(box);
+      };
+
+      const loadApp = () => {
+        const app = document.createElement('script');
+        app.src = './app.js?v=3';
+        app.onerror = showError;
+        document.body.appendChild(app);
+      };
+
+      const loadNext = () => {
+        if (window.grapesjs) return loadApp();
+        if (index >= sources.length) return showError();
+
+        const script = document.createElement('script');
+        script.src = sources[index++];
+        script.onload = () => window.grapesjs ? loadApp() : loadNext();
+        script.onerror = loadNext;
+        document.body.appendChild(script);
+      };
+
+      loadNext();
+    })();
+  </script>
 </body>
 </html>
