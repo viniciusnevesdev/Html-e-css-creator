@@ -652,13 +652,22 @@
 
   function lockInterfaceZoom() {
     const blockGesture = event => event.preventDefault();
+
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(name => {
       document.addEventListener(name, blockGesture, { passive: false });
     });
 
-    document.addEventListener('touchmove', event => {
-      if (event.touches && event.touches.length > 1) event.preventDefault();
-    }, { passive: false });
+    const blockMultiTouch = event => {
+      if (event.touches && event.touches.length > 1) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchstart', blockMultiTouch, { passive: false });
+    document.addEventListener('touchmove', blockMultiTouch, { passive: false });
+
+    document.documentElement.style.touchAction = 'pan-x pan-y';
+    document.body.style.touchAction = 'pan-x pan-y';
   }
 
   $('#zoomOutBtn')?.addEventListener('click', () => setCanvasZoom(canvasZoom - 10));
