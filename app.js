@@ -435,14 +435,14 @@
     if (stage) stage.style.width = `${viewportWidth}px`;
     const label = $('#deviceLabel');
     if (label) label.textContent = `${viewportWidth} px`;
-    $('.device-switch button').forEach(btn => {
+    $$('.device-switch button').forEach(btn => {
       btn.classList.toggle('active', Number(btn.dataset.viewport) === viewportWidth);
     });
     if (save) localStorage.setItem(VIEWPORT_KEY, String(viewportWidth));
     requestAnimationFrame(() => editor.refresh());
   }
 
-  $('.device-switch button').forEach(btn => {
+  $$('.device-switch button').forEach(btn => {
     btn.addEventListener('click', () => setViewport(Number(btn.dataset.viewport)));
   });
 
