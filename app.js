@@ -685,8 +685,11 @@
     if (!canvasHost) return;
 
     if (previewing) {
-      const topbarHeight = $('.topbar')?.getBoundingClientRect().height || 58;
-      const available = Math.max(320, window.innerHeight - topbarHeight - 68);
+      const topbarHeight = $('.topbar')?.getBoundingClientRect().height || 48;
+      const bottomReserve = sheetCollapsed
+        ? ($('#sheet')?.getBoundingClientRect().height || 52)
+        : 68;
+      const available = Math.max(320, window.innerHeight - topbarHeight - bottomReserve);
       canvasHost.style.height = `${available}px`;
     } else {
       canvasHost.style.height = '740px';
