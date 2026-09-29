@@ -645,6 +645,7 @@
     canvasZoom = clampZoom(value);
     editor.Canvas.setZoom(canvasZoom);
     updateZoomUi();
+    requestAnimationFrame(syncCanvasSize);
     if (save) localStorage.setItem(ZOOM_KEY, String(canvasZoom));
   }
 
@@ -875,6 +876,7 @@
     if (Number.isFinite(current)) {
       canvasZoom = clampZoom(current);
       updateZoomUi();
+      requestAnimationFrame(syncCanvasSize);
     }
   });
 
@@ -895,7 +897,9 @@
 
     const frame = editor.Canvas.getFrame?.();
     if (frame) {
-      frame.set({ height: `${available}px` });
+      const zoomFactor = Math.max(0.2, (editor.Canvas.getZoom?.() || canvasZoom || 100) / 100);
+      const frameHeight = Math.ceil(available / zoomFactor);
+      frame.set({ height: `${frameHeight}px` });
     }
 
     requestAnimationFrame(() => {
@@ -941,6 +945,10 @@
   });
 
   window.addEventListener('resize', syncCanvasSize);
+
+  $('.workspace')?.addEventListener('transitionend', event => {
+    if (event.propertyName === 'bottom') syncCanvasSize();
+  });
 
   $('#applyUpdateBtn')?.addEventListener('click', applyAvailableUpdate);
 
