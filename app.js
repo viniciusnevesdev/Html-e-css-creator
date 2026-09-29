@@ -2,6 +2,9 @@
   const STORAGE_KEY = 'mobile-ui-builder-project-v1';
   const VIEWPORT_KEY = 'mobile-ui-builder-viewport-v1';
   const ZOOM_KEY = 'mobile-ui-builder-zoom-v1';
+  const CURRENT_BUILD = String(window.__APP_BUILD__ || '');
+  let latestAvailableBuild = null;
+  let lastUpdateCheck = 0;
   const $ = (s) => document.querySelector(s);
   const all = (s) => [...document.querySelectorAll(s)];
   let selected = null;
@@ -12,6 +15,77 @@
   const collapsedLayers = new Set();
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
   let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
+
+  function isStampedBuild(value) {
+    return Boolean(value && value !== '__BUILD_ID__' && !value.includes('__BUILD_ID__'));
+  }
+
+  function showUpdateBanner(build) {
+    latestAvailableBuild = build;
+    $('#updateBanner')?.classList.remove('hidden');
+  }
+
+  async function checkForAppUpdate(force = false) {
+    if (!isStampedBuild(CURRENT_BUILD)) return;
+
+    const now = Date.now();
+    if (!force && now - lastUpdateCheck < 30000) return;
+    lastUpdateCheck = now;
+
+    try {
+      const response = await fetch(`./version.json?check=${now}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const remoteBuild = String(data?.build || '');
+      if (isStampedBuild(remoteBuild) && remoteBuild !== CURRENT_BUILD) {
+        showUpdateBanner(remoteBuild);
+      }
+    } catch (error) {
+      console.debug('Não foi possível verificar atualização agora.', error);
+    }
+  }
+
+  async function applyAvailableUpdate() {
+    const button = $('#applyUpdateBtn');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Atualizando…';
+    }
+
+    try { persist(false); } catch (error) {}
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(registration =>
+          registration.update().catch(() => undefined)
+        ));
+      }
+    } catch (error) {
+      console.debug('Falha ao atualizar Service Worker.', error);
+    }
+
+    const url = new URL(window.location.href);
+    const buildToken = latestAvailableBuild || String(Date.now());
+    url.searchParams.set('update', buildToken.slice(0, 12));
+    window.location.replace(url.toString());
+  }
+
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      const registration = await navigator.serviceWorker.register('./sw.js', {
+        updateViaCache: 'none'
+      });
+      registration.update().catch(() => undefined);
+    } catch (error) {
+      console.debug('Service Worker indisponível.', error);
+    }
+  }
 
   const editor = grapesjs.init({
     container: '#gjs',
@@ -833,6 +907,16 @@
   });
 
   window.addEventListener('resize', syncCanvasSize);
+
+  $('#applyUpdateBtn')?.addEventListener('click', applyAvailableUpdate);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForAppUpdate();
+  });
+  window.addEventListener('focus', () => checkForAppUpdate());
+
+  registerServiceWorker();
+  checkForAppUpdate(true);
 
   function pageDisplayName(page) {
     if (!page) return 'Página';
