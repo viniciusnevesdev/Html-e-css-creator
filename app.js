@@ -48,7 +48,7 @@
   `;
 
   function flattenLegacy390Media(css) {
-    if (!css || !css.includes('max-width: 390px')) return css;
+    if (!css || !/max-width\s*:\s*390px/i.test(css)) return css;
     const style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
@@ -71,8 +71,6 @@
   }
 
   function migrateUiAttributes() {
-    const root = editor.Pages.getSelected()?.getMainComponent?.();
-    if (!root) return;
     const walk = cmp => {
       cmp.components?.().each(child => {
         const attrs = child.getAttributes?.() || {};
@@ -87,7 +85,10 @@
         walk(child);
       });
     };
-    walk(root);
+    editor.Pages.getAll().forEach(page => {
+      const root = page.getMainComponent?.();
+      if (root) walk(root);
+    });
   }
 
   function normalizeLoadedProject() {
