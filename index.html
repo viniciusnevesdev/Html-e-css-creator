@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="icon-180.png" />
   <link id="gjsCss" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/css/grapes.min.css"
         onerror="this.onerror=null;this.href='https://unpkg.com/grapesjs@0.22.12/dist/css/grapes.min.css'" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=4" />
   <title>UI Builder Mobile</title>
 </head>
 <body>
@@ -30,7 +30,13 @@
 
     <main class="workspace">
       <div class="device-stage">
-        <div class="device-label">390 px</div>
+        <div class="device-toolbar">
+          <span class="device-label" id="deviceLabel">390 px</span>
+          <div class="device-switch" aria-label="Largura de pré-visualização">
+            <button type="button" data-viewport="390">390</button>
+            <button type="button" data-viewport="430">430</button>
+          </div>
+        </div>
         <div id="gjs"></div>
       </div>
     </main>
@@ -130,7 +136,7 @@
   <div class="modal hidden" id="exportModal">
     <div class="modal-card">
       <div class="modal-head"><h2>Exportar</h2><button class="icon-btn" id="closeExport">×</button></div>
-      <div class="segmented export-tabs"><button class="active" data-export-tab="html">HTML</button><button data-export-tab="css">CSS</button></div>
+      <div class="segmented export-tabs"><button class="active" data-export-tab="html">HTML completo</button><button data-export-tab="css">CSS</button></div>
       <textarea id="exportCode" spellcheck="false"></textarea>
       <div class="action-row">
         <button id="copyExport">Copiar</button>
@@ -156,7 +162,7 @@
 
       const loadApp = () => {
         const app = document.createElement('script');
-        app.src = './app.js?v=3';
+        app.src = './app.js?v=4';
         app.onerror = showError;
         document.body.appendChild(app);
       };
