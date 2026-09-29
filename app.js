@@ -310,7 +310,14 @@
     setSheetCollapsed(false);
   }
 
-  function switchTab(name) {
+  function switchTab(name, toggleIfAlreadyOpen = false) {
+    const currentTab = $('.tab.active')?.dataset.tab;
+
+    if (toggleIfAlreadyOpen && currentTab === name && !sheetCollapsed) {
+      closeSheet();
+      return;
+    }
+
     openSheet();
     all('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
     all('.panel').forEach(x => x.classList.toggle('active', x.dataset.panel === name));
@@ -318,7 +325,7 @@
     if (name === 'pages') renderPages();
   }
 
-  all('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  all('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab, true)));
   all('.panel-close').forEach(btn => btn.addEventListener('click', closeSheet));
 
   $('.workspace')?.addEventListener('click', event => {
@@ -682,6 +689,13 @@
     const begin = event => {
       if (!event.touches?.length) return;
 
+      if (sourceWindow === window) {
+        const target = event.target;
+        if (target instanceof Element && target.closest('.device-toolbar, button, input, select, textarea')) {
+          return;
+        }
+      }
+
       moved = false;
 
       if (event.touches.length >= 2) {
@@ -792,8 +806,8 @@
   }
 
   function bindCanvasGestures(frameWindow) {
-    const host = $('#gjs');
-    bindGestureTarget(host, window);
+    const workspace = $('.workspace');
+    bindGestureTarget(workspace, window);
 
     if (!frameWindow || frameWindow.__uiBuilderGestureBound) return;
     frameWindow.__uiBuilderGestureBound = true;
@@ -862,18 +876,11 @@
 
   function syncCanvasSize() {
     const canvasHost = $('#gjs');
-    if (!canvasHost) return;
+    const workspace = $('.workspace');
+    if (!canvasHost || !workspace) return;
 
-    if (previewing) {
-      const topbarHeight = $('.topbar')?.getBoundingClientRect().height || 48;
-      const bottomReserve = sheetCollapsed
-        ? ($('#sheet')?.getBoundingClientRect().height || 52)
-        : 68;
-      const available = Math.max(320, window.innerHeight - topbarHeight - bottomReserve);
-      canvasHost.style.height = `${available}px`;
-    } else {
-      canvasHost.style.height = '740px';
-    }
+    const available = Math.max(320, workspace.clientHeight || window.innerHeight);
+    canvasHost.style.height = `${available}px`;
 
     requestAnimationFrame(() => {
       editor.refresh();
