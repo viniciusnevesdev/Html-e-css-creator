@@ -12,6 +12,8 @@
   let saveTimer = null;
   let previewing = false;
   let sheetCollapsed = false;
+  let importMode = 'html';
+  let importedHeadExtras = '';
   const collapsedLayers = new Set();
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
   let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
@@ -182,6 +184,7 @@
       try {
         const parsed = JSON.parse(raw);
         editor.loadProjectData(parsed.project || parsed);
+        importedHeadExtras = typeof parsed.importedHeadExtras === 'string' ? parsed.importedHeadExtras : '';
         const pages = editor.Pages.getAll();
         const requestedId = parsed.activePageId;
         const requested = requestedId ? pages.find(page => page.get('id') === requestedId) : null;
@@ -201,7 +204,8 @@
   function persist(showFeedback = false) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       project: editor.getProjectData(),
-      activePageId: editor.Pages.getSelected()?.get('id') || null
+      activePageId: editor.Pages.getSelected()?.get('id') || null,
+      importedHeadExtras
     }));
     if (showFeedback) {
       const btn = $('#saveBtn');
@@ -383,17 +387,29 @@
     })[type] || '';
   }
 
+  function shouldShowLayer(cmp) {
+    const type = String(cmp.get?.('type') || '').toLowerCase();
+    if (type === 'textnode' || type === 'wrapper') return false;
+
+    const attrs = cmp.getAttributes?.() || {};
+    if (attrs['data-ui']) return true;
+
+    const classes = cmp.getClasses?.() || [];
+    if (classes.includes('page-root')) return false;
+
+    const tag = String(cmp.get?.('tagName') || '').toLowerCase();
+    return Boolean(tag && !['html','body'].includes(tag));
+  }
+
   function hasVisibleLayerDescendants(cmp) {
     let found = false;
     cmp.components?.().each(child => {
       if (found) return;
-      const type = String(child.get?.('type') || '').toLowerCase();
-      const attrs = child.getAttributes?.() || {};
-      if (type !== 'textnode' && attrs['data-ui']) {
+      if (shouldShowLayer(child)) {
         found = true;
         return;
       }
-      if (type !== 'textnode' && hasVisibleLayerDescendants(child)) found = true;
+      if (hasVisibleLayerDescendants(child)) found = true;
     });
     return found;
   }
@@ -410,7 +426,7 @@
         const type = String(child.get?.('type') || '').toLowerCase();
         if (type === 'textnode') return;
 
-        const show = Boolean(attrs['data-ui']);
+        const show = shouldShowLayer(child);
 
         if (!show) {
           renderChildren(child, host);
@@ -530,7 +546,8 @@
     $('#selectedLabel').textContent = labelFor(selected);
     const attrs = selected.getAttributes?.() || {};
     const ui = attrs['data-ui'];
-    const isText = ui === 'text' || ui === 'button';
+    const tag = String(selected.get?.('tagName') || '').toLowerCase();
+    const isText = ui === 'text' || ui === 'button' || ['p','span','a','button','label','li','h1','h2','h3','h4','h5','h6'].includes(tag);
     $('#textFieldWrap').classList.toggle('hidden', !isText);
     if (isText) $('#textValue').value = selected.get('content') || selected.view?.el?.textContent || '';
 
@@ -1014,6 +1031,87 @@
   $('#saveBtn').addEventListener('click',()=>persist(true));
   $('#resetBtn').addEventListener('click',()=>{ if(confirm('Apagar o projeto salvo e recomeçar?')){localStorage.removeItem(STORAGE_KEY);location.reload();} });
 
+  function setImportMode(mode) {
+    importMode = mode === 'css' ? 'css' : 'html';
+    all('.import-tabs button').forEach(button => {
+      button.classList.toggle('active', button.dataset.importTab === importMode);
+    });
+
+    const code = $('#importCode');
+    const help = $('#importHelp');
+    if (code) {
+      code.placeholder = importMode === 'html'
+        ? 'Cole seu código HTML aqui…'
+        : 'Cole seu código CSS aqui…';
+    }
+    if (help) {
+      help.textContent = importMode === 'html'
+        ? 'Cole um HTML completo ou um trecho. O conteúdo da página atual será substituído.'
+        : 'Cole CSS para substituir os estilos atuais da página.';
+    }
+  }
+
+  function parseHtmlImport(source) {
+    const doc = new DOMParser().parseFromString(source, 'text/html');
+    const styles = [...doc.querySelectorAll('style')]
+      .map(style => style.textContent || '')
+      .filter(Boolean)
+      .join('\n\n');
+
+    const headClone = doc.head?.cloneNode(true);
+    if (headClone) {
+      headClone.querySelectorAll('style').forEach(node => node.remove());
+    }
+
+    return {
+      body: doc.body?.innerHTML || source,
+      css: styles,
+      headExtras: headClone?.innerHTML?.trim() || ''
+    };
+  }
+
+  function applyHtmlImport(source) {
+    const parsed = parseHtmlImport(source);
+    const page = editor.Pages.getSelected();
+    const root = page?.getMainComponent?.();
+    if (!root) throw new Error('Página atual indisponível.');
+
+    root.components(parsed.body);
+    editor.setStyle(parsed.css || '');
+    importedHeadExtras = parsed.headExtras;
+    selected = null;
+    migrateUiAttributes();
+    refreshInspector();
+    renderLayers();
+    renderPages();
+    persist(false);
+    requestAnimationFrame(() => {
+      editor.refresh();
+      syncCanvasSize();
+    });
+  }
+
+  function applyCssImport(source) {
+    editor.setStyle(source);
+    selected = null;
+    refreshInspector();
+    renderLayers();
+    persist(false);
+    requestAnimationFrame(() => editor.refresh());
+  }
+
+  function closeImportModal() {
+    $('#importModal')?.classList.add('hidden');
+  }
+
+  function openImportModal() {
+    setImportMode('html');
+    $('#importCode').value = '';
+    $('#importFile').value = '';
+    $('#importModal')?.classList.remove('hidden');
+    setTimeout(() => $('#importCode')?.focus(), 50);
+  }
+
   function exportCss(){ return editor.getCss(); }
 
   function exportHtmlDocument() {
@@ -1021,12 +1119,12 @@
     const match = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
     const body = match ? match[1] : raw;
     const css = exportCss();
+    const extraHead = importedHeadExtras ? `\n  ${importedHeadExtras}\n` : '\n';
     return `<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">${extraHead}  <style>
 ${css}
   </style>
 </head>
@@ -1035,6 +1133,42 @@ ${body}
 </body>
 </html>`;
   }
+
+  $('#importBtn')?.addEventListener('click', openImportModal);
+  $('#closeImport')?.addEventListener('click', closeImportModal);
+
+  all('.import-tabs button').forEach(button => {
+    button.addEventListener('click', () => setImportMode(button.dataset.importTab));
+  });
+
+  $('#importFile')?.addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.css') || file.type === 'text/css') setImportMode('css');
+    else setImportMode('html');
+
+    $('#importCode').value = await file.text();
+  });
+
+  $('#applyImport')?.addEventListener('click', () => {
+    const source = $('#importCode')?.value || '';
+    if (!source.trim()) {
+      flash('Cole ou escolha um arquivo primeiro');
+      return;
+    }
+
+    try {
+      if (importMode === 'css') applyCssImport(source);
+      else applyHtmlImport(source);
+      closeImportModal();
+      flash(importMode === 'css' ? 'CSS importado' : 'HTML importado');
+    } catch (error) {
+      console.error(error);
+      flash('Não foi possível importar esse código');
+    }
+  });
 
   function currentExport(){ return exportMode==='html'?exportHtmlDocument():exportCss(); }
   function refreshExport(){ $('#exportCode').value=currentExport(); }
