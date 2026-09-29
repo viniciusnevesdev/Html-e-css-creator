@@ -415,7 +415,7 @@
   $('#refreshLayers').addEventListener('click',renderLayers);
 
   function clampZoom(value) {
-    return Math.max(20, Math.min(200, Math.round(Number(value) || 100)));
+    return Math.max(20, Math.min(200, Number(value) || 100));
   }
 
   function updateZoomUi() {
@@ -430,52 +430,185 @@
     if (save) localStorage.setItem(ZOOM_KEY, String(canvasZoom));
   }
 
-  function touchDistance(a, b) {
-    const dx = a.clientX - b.clientX;
-    const dy = a.clientY - b.clientY;
-    return Math.hypot(dx, dy);
+  function outerTouchPoint(touch, sourceWindow) {
+    if (!sourceWindow || sourceWindow === window) {
+      return { x: touch.clientX, y: touch.clientY };
+    }
+
+    const frame = editor.Canvas.getFrameEl?.();
+    const rect = frame?.getBoundingClientRect?.();
+    if (!rect) return { x: touch.clientX, y: touch.clientY };
+
+    const width = Math.max(1, sourceWindow.innerWidth || rect.width);
+    const height = Math.max(1, sourceWindow.innerHeight || rect.height);
+    const scaleX = rect.width / width;
+    const scaleY = rect.height / height;
+
+    return {
+      x: rect.left + touch.clientX * scaleX,
+      y: rect.top + touch.clientY * scaleY
+    };
   }
 
-  function bindCanvasPinch(frameWindow) {
-    if (!frameWindow || frameWindow.__uiBuilderPinchBound) return;
-    frameWindow.__uiBuilderPinchBound = true;
+  function midpoint(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
 
-    const doc = frameWindow.document;
-    let pinching = false;
-    let startDistance = 0;
-    let startZoom = canvasZoom;
+  function pointDistance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function canvasLocalPoint(point) {
+    const host = $('#gjs');
+    const rect = host?.getBoundingClientRect?.();
+    if (!rect) return { x: point.x, y: point.y };
+    return {
+      x: point.x - rect.left - rect.width / 2,
+      y: point.y - rect.top - rect.height / 2
+    };
+  }
+
+  function bindGestureTarget(target, sourceWindow) {
+    if (!target || target.__uiBuilderGestureBound) return;
+    target.__uiBuilderGestureBound = true;
+
+    let mode = null;
+    let moved = false;
+    let startPoint = null;
+    let lastPoint = null;
+    let lastCenter = null;
+    let lastDistance = 0;
 
     const begin = event => {
-      if (!event.touches || event.touches.length < 2) return;
-      pinching = true;
-      startDistance = touchDistance(event.touches[0], event.touches[1]);
-      startZoom = editor.Canvas.getZoom() || canvasZoom;
-      event.preventDefault();
+      if (!event.touches?.length) return;
+
+      moved = false;
+
+      if (event.touches.length >= 2) {
+        const a = outerTouchPoint(event.touches[0], sourceWindow);
+        const b = outerTouchPoint(event.touches[1], sourceWindow);
+        mode = 'pinch';
+        lastCenter = midpoint(a, b);
+        lastDistance = pointDistance(a, b);
+        event.preventDefault();
+        return;
+      }
+
+      const point = outerTouchPoint(event.touches[0], sourceWindow);
+      mode = 'pan';
+      startPoint = point;
+      lastPoint = point;
     };
 
     const move = event => {
-      if (!pinching || !event.touches || event.touches.length < 2) return;
+      if (!event.touches?.length) return;
+
+      if (event.touches.length >= 2) {
+        const a = outerTouchPoint(event.touches[0], sourceWindow);
+        const b = outerTouchPoint(event.touches[1], sourceWindow);
+        const center = midpoint(a, b);
+        const distance = pointDistance(a, b);
+
+        if (mode !== 'pinch' || !lastCenter || !lastDistance) {
+          mode = 'pinch';
+          lastCenter = center;
+          lastDistance = distance;
+          event.preventDefault();
+          return;
+        }
+
+        event.preventDefault();
+        moved = true;
+
+        const oldZoom = editor.Canvas.getZoom() || canvasZoom || 100;
+        const newZoom = clampZoom(oldZoom * (distance / Math.max(1, lastDistance)));
+        const zoomDelta = newZoom / oldZoom;
+        const coords = editor.Canvas.getCoords();
+        const oldAnchor = canvasLocalPoint(lastCenter);
+        const newAnchor = canvasLocalPoint(center);
+
+        editor.Canvas.setZoom(newZoom);
+        canvasZoom = newZoom;
+        updateZoomUi();
+
+        editor.Canvas.setCoords(
+          newAnchor.x - (oldAnchor.x - coords.x) * zoomDelta,
+          newAnchor.y - (oldAnchor.y - coords.y) * zoomDelta
+        );
+
+        lastCenter = center;
+        lastDistance = distance;
+        return;
+      }
+
+      if (mode !== 'pan' || !lastPoint) return;
+
+      const point = outerTouchPoint(event.touches[0], sourceWindow);
+      if (!moved && startPoint && pointDistance(point, startPoint) < 4) {
+        lastPoint = point;
+        return;
+      }
+
       event.preventDefault();
-      const distance = touchDistance(event.touches[0], event.touches[1]);
-      if (!startDistance) return;
-      setCanvasZoom(startZoom * (distance / startDistance), false);
+      moved = true;
+
+      const dx = point.x - lastPoint.x;
+      const dy = point.y - lastPoint.y;
+      const coords = editor.Canvas.getCoords();
+      editor.Canvas.setCoords(coords.x + dx, coords.y + dy);
+      lastPoint = point;
     };
 
     const end = event => {
-      if (!pinching) return;
-      if (event.touches && event.touches.length >= 2) return;
-      pinching = false;
-      setCanvasZoom(canvasZoom, true);
+      if (event.touches?.length >= 2) return;
+
+      if (event.touches?.length === 1) {
+        const point = outerTouchPoint(event.touches[0], sourceWindow);
+        mode = 'pan';
+        startPoint = point;
+        lastPoint = point;
+        lastCenter = null;
+        lastDistance = 0;
+        return;
+      }
+
+      if (moved) event.preventDefault();
+      mode = null;
+      startPoint = null;
+      lastPoint = null;
+      lastCenter = null;
+      lastDistance = 0;
+      localStorage.setItem(ZOOM_KEY, String(canvasZoom));
     };
 
-    doc.addEventListener('touchstart', begin, { passive: false });
-    doc.addEventListener('touchmove', move, { passive: false });
-    doc.addEventListener('touchend', end, { passive: false });
-    doc.addEventListener('touchcancel', end, { passive: false });
+    target.addEventListener('touchstart', begin, { passive: false });
+    target.addEventListener('touchmove', move, { passive: false });
+    target.addEventListener('touchend', end, { passive: false });
+    target.addEventListener('touchcancel', end, { passive: false });
 
     ['gesturestart', 'gesturechange', 'gestureend'].forEach(name => {
-      doc.addEventListener(name, event => event.preventDefault(), { passive: false });
+      target.addEventListener(name, event => event.preventDefault(), { passive: false });
     });
+  }
+
+  function bindCanvasGestures(frameWindow) {
+    const host = $('#gjs');
+    bindGestureTarget(host, window);
+
+    if (!frameWindow || frameWindow.__uiBuilderGestureBound) return;
+    frameWindow.__uiBuilderGestureBound = true;
+
+    const doc = frameWindow.document;
+    if (doc.documentElement) {
+      doc.documentElement.style.touchAction = 'none';
+      doc.documentElement.style.overscrollBehavior = 'none';
+    }
+    if (doc.body) {
+      doc.body.style.touchAction = 'none';
+      doc.body.style.overscrollBehavior = 'none';
+    }
+
+    bindGestureTarget(doc, frameWindow);
   }
 
   function lockInterfaceZoom() {
@@ -502,7 +635,7 @@
   });
 
   editor.on('canvas:frame:load', ({ window }) => {
-    bindCanvasPinch(window);
+    bindCanvasGestures(window);
     setCanvasZoom(canvasZoom, false);
   });
 
@@ -655,7 +788,7 @@ ${body}
     syncCanvasSize();
     updateZoomUi();
     setCanvasZoom(canvasZoom, false);
-    bindCanvasPinch(editor.Canvas.getWindow?.());
+    bindCanvasGestures(editor.Canvas.getWindow?.());
   });
 
   requestAnimationFrame(() => {
@@ -663,7 +796,7 @@ ${body}
     syncCanvasSize();
     updateZoomUi();
     setCanvasZoom(canvasZoom, false);
-    bindCanvasPinch(editor.Canvas.getWindow?.());
+    bindCanvasGestures(editor.Canvas.getWindow?.());
   });
 
   flash('Editor pronto');
