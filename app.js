@@ -9,6 +9,7 @@
   let saveTimer = null;
   let previewing = false;
   let sheetCollapsed = false;
+  const collapsedLayers = new Set();
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
   let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
 
@@ -257,7 +258,7 @@
     const attrs = cmp.getAttributes ? cmp.getAttributes() : {};
     const type = attrs?.['data-ui'];
     const map = {
-      'container-v':'Container vertical','container-h':'Container horizontal','overlay':'Sobreposição',
+      'container-v':'Stack vertical','container-h':'Stack horizontal','overlay':'Sobreposição',
       'text':'Texto','button':'Botão','image':'Imagem','spacer':'Spacer','divider':'Divisor'
     };
     if (map[type]) {
@@ -276,36 +277,132 @@
     return ({'container-v':'↕','container-h':'↔','overlay':'▣','text':'Aa','button':'▭','image':'▧','spacer':'↕','divider':'—'})[t] || '□';
   }
 
+  function layerKey(cmp) {
+    return cmp?.cid || cmp?.getId?.() || String(cmp);
+  }
+
+  function layerKind(cmp) {
+    const type = cmp.getAttributes?.()?.['data-ui'];
+    return ({
+      'container-v':'V Stack',
+      'container-h':'H Stack',
+      'overlay':'Overlay'
+    })[type] || '';
+  }
+
+  function hasVisibleLayerDescendants(cmp) {
+    let found = false;
+    cmp.components?.().each(child => {
+      if (found) return;
+      const type = String(child.get?.('type') || '').toLowerCase();
+      const attrs = child.getAttributes?.() || {};
+      if (type !== 'textnode' && attrs['data-ui']) {
+        found = true;
+        return;
+      }
+      if (type !== 'textnode' && hasVisibleLayerDescendants(child)) found = true;
+    });
+    return found;
+  }
+
   function renderLayers() {
     const tree = $('#layersTree');
     tree.innerHTML = '';
     const root = editor.Pages.getSelected()?.getMainComponent();
     if (!root) return;
 
-    const walk = (cmp, depth) => {
-      cmp.components().each(child => {
+    const renderChildren = (parentCmp, host) => {
+      parentCmp.components?.().each(child => {
         const attrs = child.getAttributes?.() || {};
         const type = String(child.get?.('type') || '').toLowerCase();
+        if (type === 'textnode') return;
+
         const show = Boolean(attrs['data-ui']);
 
-        if (show) {
-          const row = document.createElement('button');
-          row.className = 'layer-row' + (selected === child ? ' selected' : '');
-          row.style.paddingLeft = `${10 + depth * 16}px`;
-          row.innerHTML = `<span class="layer-icon">${iconFor(child)}</span><span class="layer-name"></span>`;
-          row.querySelector('.layer-name').textContent = labelFor(child);
-          row.addEventListener('click', () => { editor.select(child); switchTab('style'); });
-          tree.appendChild(row);
+        if (!show) {
+          renderChildren(child, host);
+          return;
         }
 
-        if (type !== 'textnode' && child.components?.().length) {
-          walk(child, show ? depth + 1 : depth);
+        const key = layerKey(child);
+        const isSelected = selected === child;
+        const isStack = ['container-v','container-h','overlay'].includes(attrs['data-ui']);
+        const hasChildren = hasVisibleLayerDescendants(child);
+        const collapsed = hasChildren && collapsedLayers.has(key);
+
+        const node = document.createElement('div');
+        node.className =
+          'layer-node' +
+          (isSelected ? ' is-selected' : '') +
+          (isSelected && isStack ? ' selected-stack' : '') +
+          (collapsed ? ' is-collapsed' : '');
+
+        const row = document.createElement('div');
+        row.className = 'layer-row' + (isSelected ? ' selected' : '');
+
+        if (hasChildren) {
+          const disclosure = document.createElement('button');
+          disclosure.type = 'button';
+          disclosure.className = 'layer-disclosure';
+          disclosure.setAttribute('aria-label', collapsed ? 'Expandir camada' : 'Recolher camada');
+          disclosure.setAttribute('aria-expanded', String(!collapsed));
+          disclosure.textContent = '›';
+          disclosure.addEventListener('click', event => {
+            event.stopPropagation();
+            if (collapsedLayers.has(key)) collapsedLayers.delete(key);
+            else collapsedLayers.add(key);
+            renderLayers();
+          });
+          row.appendChild(disclosure);
+        } else {
+          const spacer = document.createElement('span');
+          spacer.className = 'layer-disclosure-spacer';
+          row.appendChild(spacer);
         }
+
+        const selectButton = document.createElement('button');
+        selectButton.type = 'button';
+        selectButton.className = 'layer-select';
+        selectButton.innerHTML =
+          `<span class="layer-icon">${iconFor(child)}</span>` +
+          '<span class="layer-name"></span>' +
+          '<span class="layer-kind"></span>';
+        selectButton.querySelector('.layer-name').textContent = labelFor(child);
+
+        const kind = layerKind(child);
+        const kindEl = selectButton.querySelector('.layer-kind');
+        kindEl.textContent = kind;
+        kindEl.classList.toggle('hidden', !kind);
+
+        selectButton.addEventListener('click', () => {
+          editor.select(child);
+          renderLayers();
+        });
+
+        row.appendChild(selectButton);
+        node.appendChild(row);
+
+        if (hasChildren && !collapsed) {
+          const children = document.createElement('div');
+          children.className = 'layer-children';
+          renderChildren(child, children);
+          node.appendChild(children);
+        }
+
+        host.appendChild(node);
       });
     };
 
-    walk(root, 0);
-    if (!tree.children.length) tree.innerHTML = '<div class="empty-state">Esta página está vazia.</div>';
+    renderChildren(root, tree);
+
+    if (!tree.children.length) {
+      tree.innerHTML = '<div class="empty-state">Esta página está vazia.</div>';
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      tree.querySelector('.layer-row.selected')?.scrollIntoView?.({block:'nearest'});
+    });
   }
 
   function safeStyle(cmp, key, fallback='') {
