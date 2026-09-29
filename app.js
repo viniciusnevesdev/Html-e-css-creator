@@ -3,7 +3,7 @@
   const VIEWPORT_KEY = 'mobile-ui-builder-viewport-v1';
   const ZOOM_KEY = 'mobile-ui-builder-zoom-v1';
   const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
+  const all = (s) => [...document.querySelectorAll(s)];
   let selected = null;
   let exportMode = 'html';
   let saveTimer = null;
@@ -215,7 +215,7 @@
     flash('Elemento adicionado');
   }
 
-  $$('.component-card').forEach(btn => btn.addEventListener('click', () => addComponent(btn.dataset.add)));
+  all('.component-card').forEach(btn => btn.addEventListener('click', () => addComponent(btn.dataset.add)));
 
   function setSheetCollapsed(collapsed) {
     sheetCollapsed = Boolean(collapsed);
@@ -237,14 +237,14 @@
 
   function switchTab(name) {
     openSheet();
-    $('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
-    $('.panel').forEach(x => x.classList.toggle('active', x.dataset.panel === name));
+    all('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+    all('.panel').forEach(x => x.classList.toggle('active', x.dataset.panel === name));
     if (name === 'layers') renderLayers();
     if (name === 'pages') renderPages();
   }
 
-  $('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
-  $('.panel-close').forEach(btn => btn.addEventListener('click', closeSheet));
+  all('.tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+  all('.panel-close').forEach(btn => btn.addEventListener('click', closeSheet));
 
   $('.workspace')?.addEventListener('click', event => {
     const target = event.target;
@@ -716,14 +716,14 @@
     if (stage) stage.style.width = `${viewportWidth}px`;
     const label = $('#deviceLabel');
     if (label) label.textContent = `${viewportWidth} px`;
-    $$('.device-switch button').forEach(btn => {
+    all('.device-switch button').forEach(btn => {
       btn.classList.toggle('active', Number(btn.dataset.viewport) === viewportWidth);
     });
     if (save) localStorage.setItem(VIEWPORT_KEY, String(viewportWidth));
     requestAnimationFrame(() => editor.refresh());
   }
 
-  $$('.device-switch button').forEach(btn => {
+  all('.device-switch button').forEach(btn => {
     btn.addEventListener('click', () => setViewport(Number(btn.dataset.viewport)));
   });
 
@@ -816,8 +816,8 @@ ${body}
   function refreshExport(){ $('#exportCode').value=currentExport(); }
   $('#exportBtn').addEventListener('click',()=>{ $('#exportModal').classList.remove('hidden'); refreshExport(); });
   $('#closeExport').addEventListener('click',()=>$('#exportModal').classList.add('hidden'));
-  $$('.export-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
-    exportMode=btn.dataset.exportTab; $$('.export-tabs button').forEach(b=>b.classList.toggle('active',b===btn)); refreshExport();
+  all('.export-tabs button').forEach(btn=>btn.addEventListener('click',()=>{
+    exportMode=btn.dataset.exportTab; all('.export-tabs button').forEach(b=>b.classList.toggle('active',b===btn)); refreshExport();
   }));
   $('#copyExport').addEventListener('click',async()=>{
     const text=currentExport();
