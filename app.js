@@ -900,6 +900,7 @@
 
   editor.on('canvas:frame:load', ({ window }) => {
     bindCanvasGestures(window);
+    syncImportedHeadToCanvas();
     setCanvasZoom(canvasZoom, false);
   });
 
@@ -1053,21 +1054,39 @@
 
   function parseHtmlImport(source) {
     const doc = new DOMParser().parseFromString(source, 'text/html');
-    const styles = [...doc.querySelectorAll('style')]
+    const styleNodes = [...doc.querySelectorAll('style')];
+    const styles = styleNodes
       .map(style => style.textContent || '')
       .filter(Boolean)
       .join('\n\n');
 
-    const headClone = doc.head?.cloneNode(true);
-    if (headClone) {
-      headClone.querySelectorAll('style').forEach(node => node.remove());
-    }
+    styleNodes.forEach(node => node.remove());
 
     return {
       body: doc.body?.innerHTML || source,
       css: styles,
-      headExtras: headClone?.innerHTML?.trim() || ''
+      headExtras: doc.head?.innerHTML?.trim() || ''
     };
+  }
+
+  function syncImportedHeadToCanvas() {
+    const canvasDoc = editor.Canvas.getDocument?.();
+    if (!canvasDoc?.head) return;
+
+    canvasDoc.head.querySelectorAll('[data-imported-head]').forEach(node => node.remove());
+    if (!importedHeadExtras) return;
+
+    const parsed = new DOMParser().parseFromString(
+      `<!doctype html><html><head>${importedHeadExtras}</head><body></body></html>`,
+      'text/html'
+    );
+
+    parsed.head.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+      const clone = canvasDoc.createElement('link');
+      [...link.attributes].forEach(attr => clone.setAttribute(attr.name, attr.value));
+      clone.setAttribute('data-imported-head', 'true');
+      canvasDoc.head.appendChild(clone);
+    });
   }
 
   function applyHtmlImport(source) {
@@ -1081,6 +1100,7 @@
     importedHeadExtras = parsed.headExtras;
     selected = null;
     migrateUiAttributes();
+    syncImportedHeadToCanvas();
     refreshInspector();
     renderLayers();
     renderPages();
