@@ -28,7 +28,7 @@ button{color:inherit}
 .device-switch button.active{background:#4a4a50;color:#fff}
 .zoom-control .zoom-value{min-width:48px;color:var(--text);font-variant-numeric:tabular-nums}
 .zoom-control button:active{background:#3a3a3f;color:#fff}
-#gjs{height:740px;border-radius:32px;overflow:hidden;background:#000;box-shadow:0 18px 55px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
+#gjs{height:740px;touch-action:none;overscroll-behavior:none;border-radius:32px;overflow:hidden;background:#000;box-shadow:0 18px 55px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.08)}
 .gjs-editor{font-family:inherit;height:100%!important}.gjs-cv-canvas{width:100%!important;height:100%!important;top:0!important}.gjs-cv-canvas iframe{background:#000;height:100%!important}.gjs-pn-panels{display:none!important}.gjs-badge,.gjs-toolbar{font-family:inherit}
 .sheet{position:fixed;z-index:40;left:0;right:0;bottom:0;height:var(--sheet-h);background:rgba(25,25,28,.98);border-radius:26px 26px 0 0;box-shadow:0 -16px 45px rgba(0,0,0,.38);padding-bottom:env(safe-area-inset-bottom);display:flex;flex-direction:column;border-top:1px solid rgba(255,255,255,.08)}
 .grabber{width:42px;height:4px;border-radius:999px;background:#66666c;margin:7px auto 5px;flex:0 0 auto}.sheet-content{flex:1;overflow:auto;padding:0 12px 12px}.panel{display:none}.panel.active{display:block}.panel h2{font-size:18px;margin:6px 0 10px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.selected-label{font-size:11px;color:var(--muted);max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mini-btn{border:0;background:var(--surface-3);border-radius:9px;padding:6px 8px;font-size:11px}
