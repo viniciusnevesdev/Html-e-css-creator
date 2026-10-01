@@ -519,7 +519,8 @@
     const v = style[key];
     if (v !== undefined && v !== '') return String(v);
     const el = cmp.view?.el;
-    if (el && getComputedStyle(el)[key]) return getComputedStyle(el)[key];
+    const computed = el?.ownerDocument.defaultView.getComputedStyle(el);
+    if (computed && computed[key]) return computed[key];
     return fallback;
   }
 
@@ -533,6 +534,116 @@
     selected.addStyle(patch);
     schedulePersist();
   }
+
+  function clearSelection() {
+    editor.select(null);
+    selected = null;
+    refreshInspector();
+    renderLayers();
+  }
+
+  // Use a completed tap, not touchstart: pan and pinch must keep the selection.
+  function bindBlankSelection(target, frameWindow = null) {
+    if (!target || target.__blankSelectionBound) return;
+    target.__blankSelectionBound = true;
+    const pointers = new Set();
+    let tap = null;
+    const isBlank = element => {
+      if (!element?.closest) return false;
+      if (frameWindow) {
+        return element === frameWindow.document.body ||
+          element === frameWindow.document.documentElement ||
+          element.classList.contains('page-root');
+      }
+      if (element.closest('.device-toolbar, button, input, select, textarea')) return false;
+      return element.matches('.workspace, .device-stage, #gjs, .gjs-cv-canvas, .gjs-cv-canvas__frames');
+    };
+    target.addEventListener('pointerdown', event => {
+      pointers.add(event.pointerId);
+      if (pointers.size !== 1 || event.button !== 0) { tap = null; return; }
+      tap = isBlank(event.target) ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+    }, true);
+    target.addEventListener('pointermove', event => {
+      if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 4) tap = null;
+    }, true);
+    target.addEventListener('pointerup', event => {
+      const clear = tap?.id === event.pointerId && isBlank(event.target);
+      pointers.delete(event.pointerId);
+      tap = null;
+      // GrapesJS can select the wrapper in the same event; clear after its handlers.
+      if (clear && !previewing) setTimeout(clearSelection, 0);
+    }, true);
+    target.addEventListener('pointercancel', event => {
+      pointers.delete(event.pointerId);
+      tap = null;
+    }, true);
+    target.addEventListener('click', event => {
+      if (event.detail === 0 && isBlank(event.target) && !previewing) clearSelection();
+    });
+  }
+
+  let precisionStep = 1;
+  const precisionFields = {
+    widthValue: ['width', 0], heightValue: ['height', 0], gapValue: ['gap', 0],
+    xValue: ['left', -Infinity], yValue: ['top', -Infinity],
+    paddingValue: ['padding', 0], marginValue: ['margin', -Infinity],
+    borderWidthValue: ['border-width', 0], radiusValue: ['border-radius', 0]
+  };
+
+  function stepPrecisionField(id, direction) {
+    if (!selected) return;
+    const [property, minimum] = precisionFields[id];
+    const el = selected.view?.el;
+    const computed = el?.ownerDocument.defaultView.getComputedStyle(el);
+    let value = computed?.getPropertyValue(property) || safeStyle(selected, property, '0px');
+    const offset = property === 'left' || property === 'top';
+    if (offset && (value === 'auto' || computed?.position === 'static')) value = '0px';
+    if (!/^-?\d+(?:\.\d+)?(?:px)?$/.test(value.trim())) {
+      flash('Digite um valor em px antes de ajustar');
+      return;
+    }
+    const next = Math.max(minimum, Math.round((parseFloat(value) + direction * precisionStep) * 1000) / 1000);
+    const patch = { [property]: `${next}px` };
+    if (offset && safeStyle(selected, 'position', 'static') === 'static') patch.position = 'relative';
+    if (property === 'border-width') patch['border-style'] = 'solid';
+    setStylePatch(patch);
+    refreshInspector();
+  }
+
+  Object.keys(precisionFields).forEach(id => {
+    const input = $('#' + id);
+    const oldField = input.parentElement;
+    // Buttons inside a label can focus its input and open the iPhone keyboard.
+    const field = document.createElement('div');
+    [...oldField.attributes].forEach(attribute => field.setAttribute(attribute.name, attribute.value));
+    while (oldField.firstChild) field.appendChild(oldField.firstChild);
+    oldField.replaceWith(field);
+    const title = field.querySelector('span').textContent;
+    input.setAttribute('aria-label', title + ' em pixels');
+    const controls = document.createElement('div');
+    controls.className = 'precision-control';
+    input.before(controls);
+    [-1, 1].forEach(direction => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = direction < 0 ? '−' : '+';
+      button.setAttribute('aria-label', (direction < 0 ? 'Diminuir ' : 'Aumentar ') + title);
+      button.addEventListener('pointerdown', event => event.preventDefault());
+      button.addEventListener('click', () => stepPrecisionField(id, direction));
+      if (direction < 0) controls.appendChild(button);
+      else { controls.appendChild(input); controls.appendChild(button); }
+    });
+  });
+  $('#precisionStep').addEventListener('click', event => {
+    const button = event.target.closest('button[data-step]');
+    if (!button) return;
+    precisionStep = Number(button.dataset.step);
+    all('#precisionStep button').forEach(item => {
+      const active = item === button;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-pressed', String(active));
+    });
+  });
 
   function refreshInspector() {
     const empty = $('#inspectorEmpty');
@@ -559,6 +670,8 @@
     $('#widthValueWrap').classList.toggle('hidden', mode !== 'fixed');
     $('#widthValue').value = numeric(width, 300);
     $('#heightValue').value = safeStyle(selected,'height','auto').replace('px','');
+    $('#xValue').value = numeric(safeStyle(selected, 'left', '0'), 0);
+    $('#yValue').value = numeric(safeStyle(selected, 'top', '0'), 0);
     $('#gapValue').value = numeric(safeStyle(selected,'gap','0'),0);
     $('#paddingValue').value = numeric(safeStyle(selected,'padding','0'),0);
     $('#marginValue').value = numeric(safeStyle(selected,'margin','0'),0);
@@ -605,6 +718,12 @@
   });
 
   $('#textValue').addEventListener('input', e => { if(selected){ selected.components(e.target.value); schedulePersist(); renderLayers(); }});
+  ['xValue', 'yValue'].forEach(id => $('#' + id).addEventListener('input', event => {
+    if (!selected || !event.target.value.trim() || !Number.isFinite(Number(event.target.value))) return;
+    const patch = { [precisionFields[id][0]]: `${Number(event.target.value)}px` };
+    if (safeStyle(selected, 'position', 'static') === 'static') patch.position = 'relative';
+    setStylePatch(patch);
+  }));
   $('#widthValue').addEventListener('input', e => setStylePatch({width:`${Number(e.target.value)||0}px`}));
   $('#heightValue').addEventListener('change', e => { const v=e.target.value.trim(); setStylePatch({height: (!v || v==='auto')?'auto':/^\d+(\.\d+)?$/.test(v)?`${v}px`:v}); });
   $('#gapValue').addEventListener('input', e => setStylePatch({gap:`${Number(e.target.value)||0}px`}));
@@ -646,8 +765,8 @@
   editor.on('component:deselected', () => { selected=null; refreshInspector(); renderLayers(); });
   editor.on('update', schedulePersist);
 
-  $('#undoBtn').addEventListener('click',()=>editor.UndoManager.undo());
-  $('#redoBtn').addEventListener('click',()=>editor.UndoManager.redo());
+  $('#undoBtn').addEventListener('click',()=>{ editor.UndoManager.undo(); refreshInspector(); renderLayers(); });
+  $('#redoBtn').addEventListener('click',()=>{ editor.UndoManager.redo(); refreshInspector(); renderLayers(); });
   $('#refreshLayers').addEventListener('click',renderLayers);
 
   function clampZoom(value) {
@@ -838,11 +957,13 @@
   function bindCanvasGestures(frameWindow) {
     const workspace = $('.workspace');
     bindGestureTarget(workspace, window);
+    bindBlankSelection(workspace);
 
     if (!frameWindow || frameWindow.__uiBuilderGestureBound) return;
     frameWindow.__uiBuilderGestureBound = true;
 
     const doc = frameWindow.document;
+    bindBlankSelection(doc, frameWindow);
     if (doc.documentElement) {
       doc.documentElement.style.touchAction = 'none';
       doc.documentElement.style.overscrollBehavior = 'none';
@@ -1230,5 +1351,4 @@ ${body}
 
   flash('Editor pronto');
 
-  if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 })();
