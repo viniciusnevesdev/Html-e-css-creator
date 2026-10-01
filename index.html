@@ -130,9 +130,15 @@
             </label>
 
             <div class="section-title">Layout</div>
+            <div class="segmented" id="precisionStep" role="group" aria-label="Passo dos ajustes em pixels">
+              <button type="button" class="active" data-step="1" aria-pressed="true">Passo: 1 px</button>
+              <button type="button" data-step="2" aria-pressed="false">Passo: 2 px</button>
+            </div>
             <div class="segmented" id="widthMode">
               <button data-value="full">Full</button><button data-value="fit">Fit</button><button data-value="fixed">Fixo</button>
             </div>
+            <label class="field"><span>X · deslocamento</span><input id="xValue" type="number" inputmode="decimal" /></label>
+            <label class="field"><span>Y · deslocamento</span><input id="yValue" type="number" inputmode="decimal" /></label>
             <label class="field" id="widthValueWrap"><span>Largura</span><input id="widthValue" type="number" min="0" inputmode="decimal" /></label>
             <label class="field"><span>Altura</span><input id="heightValue" type="text" placeholder="auto ou 120" /></label>
             <label class="field"><span>Gap</span><input id="gapValue" type="number" min="0" inputmode="decimal" /></label>
