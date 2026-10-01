@@ -80,3 +80,9 @@ button{color:inherit}
 @media (min-width:700px){:root{--sheet-h:410px}.sheet{left:50%;right:auto;transform:translateX(-50%);width:min(760px,96vw);border-radius:26px 26px 0 0}}
 
 .ui-icon{width:20px;height:20px;display:block;flex:0 0 auto}.icon-btn .ui-icon{pointer-events:none}.tab-ui-icon{width:18px;height:18px}.tab .tab-ui-icon{margin:0}
+.precision-control{display:flex;align-items:center;gap:4px;min-width:0}
+.precision-control input{min-width:0;flex:1;text-align:center;font-variant-numeric:tabular-nums}
+.precision-control button{flex:0 0 36px;min-height:44px;border:0;border-radius:9px;background:var(--surface-3);font-size:22px;touch-action:manipulation}
+.precision-control button:active{background:var(--accent);color:#fff}
+.precision-control input[type=number]{appearance:textfield;-moz-appearance:textfield}
+.precision-control input::-webkit-inner-spin-button,.precision-control input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
