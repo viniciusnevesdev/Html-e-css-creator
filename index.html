@@ -134,8 +134,8 @@
           <div id="inspectorEmpty" class="empty-state">Toque em um elemento na tela para editar.</div>
           <div id="inspector" class="inspector hidden">
             <div class="section-title">Identidade</div>
-            <label class="field full-field"><span>Nome amigável</span><input id="friendlyNameValue" type="text" placeholder="Ex.: Título do evento" /></label>
-            <label class="field full-field"><span>ID técnico do elemento</span><input id="elementIdValue" type="text" autocapitalize="off" placeholder="Ex.: event-title" /></label>
+            <label class="field full-field"><span>Nome amigável <button type="button" class="info-btn" data-help="friendly-name" aria-label="Mais informações">i</button></span><input id="friendlyNameValue" type="text" placeholder="Ex.: Título do evento" /></label>
+            <label class="field full-field"><span>ID técnico do elemento <button type="button" class="info-btn" data-help="technical-id" aria-label="Mais informações">i</button></span><input id="elementIdValue" type="text" autocapitalize="off" placeholder="Ex.: event-title" /></label>
             <div class="field full-field identity-readout"><span>Tipo e referência</span><strong id="identityInfo">—</strong><div class="action-row"><button type="button" id="copyIdBtn">Copiar ID</button><button type="button" id="copyReferenceBtn">Copiar referência</button></div></div>
             <div class="action-row full-field"><button type="button" id="createComponentBtn">Criar componente desta seleção</button></div>
             <label class="field full-field" id="textFieldWrap">
@@ -148,26 +148,26 @@
               <button type="button" class="active" data-step="1" aria-pressed="true">Passo: 1 px</button>
               <button type="button" data-step="2" aria-pressed="false">Passo: 2 px</button>
             </div>
-            <div class="segmented" id="widthMode">
+            <div class="segmented-label">Comportamento da largura <button type="button" class="info-btn" data-help="width-mode" aria-label="Mais informações">i</button></div><div class="segmented" id="widthMode">
               <button data-value="full">Full</button><button data-value="fit">Fit</button><button data-value="fixed">Fixo</button>
             </div>
             <label class="field"><span>X · deslocamento</span><input id="xValue" type="number" inputmode="decimal" /></label>
             <label class="field"><span>Y · deslocamento</span><input id="yValue" type="number" inputmode="decimal" /></label>
             <label class="field" id="widthValueWrap"><span>Largura</span><input id="widthValue" type="number" min="0" inputmode="decimal" /></label>
             <label class="field"><span>Altura</span><input id="heightValue" type="text" placeholder="auto ou 120" /></label>
-            <label class="field"><span>Gap</span><input id="gapValue" type="number" min="0" inputmode="decimal" /></label>
-            <div class="spacing-group full-field"><div class="spacing-head"><strong>Padding</strong><button type="button" class="spacing-link active" data-spacing="padding">Vinculado</button></div><div class="spacing-grid">
+            <label class="field"><span>Gap <button type="button" class="info-btn" data-help="gap" aria-label="Mais informações">i</button></span><input id="gapValue" type="number" min="0" inputmode="decimal" /></label>
+            <div class="spacing-group full-field"><div class="spacing-head"><strong>Padding <button type="button" class="info-btn" data-help="padding-margin" aria-label="Mais informações">i</button></strong><button type="button" class="spacing-link active" data-spacing="padding">Vinculado</button></div><div class="spacing-grid">
 <label class="field"><span>Top</span><input id="paddingTopValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Right</span><input id="paddingRightValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Bottom</span><input id="paddingBottomValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Left</span><input id="paddingLeftValue" type="number" min="0" inputmode="decimal" /></label></div></div>
-<div class="spacing-group full-field"><div class="spacing-head"><strong>Margin</strong><button type="button" class="spacing-link active" data-spacing="margin">Vinculado</button></div><div class="spacing-grid">
+<div class="spacing-group full-field"><div class="spacing-head"><strong>Margin <button type="button" class="info-btn" data-help="padding-margin" aria-label="Mais informações">i</button></strong><button type="button" class="spacing-link active" data-spacing="margin">Vinculado</button></div><div class="spacing-grid">
 <label class="field"><span>Top</span><input id="marginTopValue" type="number" inputmode="decimal" /></label><label class="field"><span>Right</span><input id="marginRightValue" type="number" inputmode="decimal" /></label><label class="field"><span>Bottom</span><input id="marginBottomValue" type="number" inputmode="decimal" /></label><label class="field"><span>Left</span><input id="marginLeftValue" type="number" inputmode="decimal" /></label></div></div>
 
-            <label class="field full-field"><span>Direção</span>
+            <label class="field full-field"><span>Direção <button type="button" class="info-btn" data-help="flex-direction" aria-label="Mais informações">i</button></span>
               <select id="directionValue"><option value="column">Vertical</option><option value="row">Horizontal</option><option value="overlay">Sobreposição</option></select>
             </label>
             <label class="field"><span>Alinhar</span>
               <select id="alignValue"><option value="stretch">Esticar</option><option value="flex-start">Início</option><option value="center">Centro</option><option value="flex-end">Fim</option></select>
             </label>
-            <label class="field"><span>Distribuir</span>
+            <label class="field"><span>Distribuir <button type="button" class="info-btn" data-help="justify-content" aria-label="Mais informações">i</button></span>
               <select id="justifyValue"><option value="flex-start">Início</option><option value="center">Centro</option><option value="flex-end">Fim</option><option value="space-between">Espaçar</option></select>
             </label>
 
@@ -184,7 +184,7 @@
               <select id="overflowValue"><option value="visible">Visível</option><option value="hidden">Recortar</option><option value="auto">Scroll automático</option></select>
             </label>
 
-            <div class="section-title">Aparência reutilizável</div><div class="action-row full-field"><button type="button" id="copyAppearanceBtn">Copiar aparência</button><button type="button" id="pasteAppearanceBtn" disabled>Colar aparência</button></div><div class="section-title">Organização</div>
+            <div class="section-title">Aparência reutilizável <button type="button" class="info-btn" data-help="copy-appearance" aria-label="Mais informações">i</button></div><div class="action-row full-field"><button type="button" id="copyAppearanceBtn">Copiar aparência</button><button type="button" id="pasteAppearanceBtn" disabled>Colar aparência</button></div><div class="section-title">Organização</div>
             <div class="action-row">
               <button id="moveUpBtn">↑ Subir</button>
               <button id="moveDownBtn">↓ Descer</button>
@@ -273,8 +273,8 @@
     <div class="modal-card entity-modal-card">
       <div class="modal-head"><h2 id="entityModalTitle">Novo projeto</h2><button class="icon-btn" id="closeEntityModal" aria-label="Fechar">×</button></div>
       <p id="entityModalHelp" class="import-help"></p>
-      <label class="field"><span>Nome amigável</span><input id="entityNameInput" type="text" /></label>
-      <label class="field" id="entityIdWrap"><span>ID técnico</span><input id="entityIdInput" type="text" autocapitalize="off" /></label>
+      <label class="field"><span>Nome amigável <button type="button" class="info-btn" data-help="friendly-name" aria-label="Mais informações">i</button></span><input id="entityNameInput" type="text" /></label>
+      <label class="field" id="entityIdWrap"><span>ID técnico <button type="button" class="info-btn" data-help="technical-id" aria-label="Mais informações">i</button></span><input id="entityIdInput" type="text" autocapitalize="off" /></label>
       <div class="action-row"><button id="confirmEntityBtn">Salvar</button></div>
     </div>
   </div>
@@ -332,5 +332,6 @@
       loadNext();
     })();
   </script>
+<div id="contextHelp" class="context-help hidden" role="dialog" aria-modal="false" aria-live="polite"><div class="context-help-head"><strong id="contextHelpTitle"></strong><button type="button" id="closeContextHelp" aria-label="Fechar">×</button></div><p id="contextHelpText"></p></div>
 </body>
 </html>
