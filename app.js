@@ -11,6 +11,9 @@
   let exportMode = 'html';
   let saveTimer = null;
   let previewing = false;
+  let interactionMode = 'edit';
+  let appearanceClipboard = null;
+  const spacingLinked = { padding: true, margin: true };
   let sheetCollapsed = false;
   let importMode = 'html';
   let importedHeadExtras = '';
@@ -846,7 +849,9 @@
   const precisionFields = {
     widthValue: ['width', 0], heightValue: ['height', 0], gapValue: ['gap', 0],
     xValue: ['left', -Infinity], yValue: ['top', -Infinity],
-    paddingValue: ['padding', 0], marginValue: ['margin', -Infinity],
+    paddingTopValue: ['padding-top', 0], paddingRightValue: ['padding-right', 0], paddingBottomValue: ['padding-bottom', 0], paddingLeftValue: ['padding-left', 0],
+    marginTopValue: ['margin-top', -Infinity], marginRightValue: ['margin-right', -Infinity], marginBottomValue: ['margin-bottom', -Infinity], marginLeftValue: ['margin-left', -Infinity],
+    fontSizeValue: ['font-size', 0], lineHeightValue: ['line-height', 0], letterSpacingValue: ['letter-spacing', -Infinity],
     borderWidthValue: ['border-width', 0], radiusValue: ['border-radius', 0]
   };
 
@@ -935,11 +940,10 @@
     $('#widthValueWrap').classList.toggle('hidden', mode !== 'fixed');
     $('#widthValue').value = numeric(width, 300);
     $('#heightValue').value = safeStyle(selected,'height','auto').replace('px','');
-    $('#xValue').value = numeric(safeStyle(selected, 'left', '0'), 0);
-    $('#yValue').value = numeric(safeStyle(selected, 'top', '0'), 0);
+    const freePosition = ['absolute','fixed'].includes(safeStyle(selected,'position','static'));
+    $('#xValue').closest('.field').classList.toggle('hidden', !freePosition); $('#yValue').closest('.field').classList.toggle('hidden', !freePosition);
     $('#gapValue').value = numeric(safeStyle(selected,'gap','0'),0);
-    $('#paddingValue').value = numeric(safeStyle(selected,'padding','0'),0);
-    $('#marginValue').value = numeric(safeStyle(selected,'margin','0'),0);
+    ['Top','Right','Bottom','Left'].forEach(side => { const s=side.toLowerCase(); $('#padding'+side+'Value').value=numeric(safeStyle(selected,'padding-'+s,'0'),0); $('#margin'+side+'Value').value=numeric(safeStyle(selected,'margin-'+s,'0'),0); });
     const display = safeStyle(selected,'display','block');
     const position = safeStyle(selected,'position','static');
     let dir = safeStyle(selected,'flex-direction','column');
@@ -948,6 +952,8 @@
     $('#alignValue').value = safeStyle(selected,'align-items','stretch') || 'stretch';
     $('#justifyValue').value = safeStyle(selected,'justify-content','flex-start') || 'flex-start';
 
+    $('#typographyTitle').classList.toggle('hidden', !isText); $('#typographyControls').classList.toggle('hidden', !isText);
+    if(isText){ $('#fontSizeValue').value=numeric(safeStyle(selected,'font-size','16'),16); $('#lineHeightValue').value=numeric(safeStyle(selected,'line-height','20'),20); $('#letterSpacingValue').value=numeric(safeStyle(selected,'letter-spacing','0'),0); const w=String(Math.round(numeric(safeStyle(selected,'font-weight','400'),400)/100)*100); $('#fontWeightValue').value=['400','500','600','700','800'].includes(w)?w:'400'; $('#textAlignValue').value=safeStyle(selected,'text-align','left')||'left'; }
     $('#backgroundValue').value = rgbToHex(safeStyle(selected,'background-color','#000000'));
     $('#colorValue').value = rgbToHex(safeStyle(selected,'color','#ffffff'));
     $('#borderWidthValue').value = numeric(safeStyle(selected,'border-width','0'),0);
@@ -1021,14 +1027,16 @@
   ['xValue', 'yValue'].forEach(id => $('#' + id).addEventListener('input', event => {
     if (!selected || !event.target.value.trim() || !Number.isFinite(Number(event.target.value))) return;
     const patch = { [precisionFields[id][0]]: `${Number(event.target.value)}px` };
-    if (safeStyle(selected, 'position', 'static') === 'static') patch.position = 'relative';
+    if (!['absolute','fixed'].includes(safeStyle(selected, 'position', 'static'))) return;
     setStylePatch(patch);
   }));
   $('#widthValue').addEventListener('input', e => setStylePatch({width:`${Number(e.target.value)||0}px`}));
   $('#heightValue').addEventListener('change', e => { const v=e.target.value.trim(); setStylePatch({height: (!v || v==='auto')?'auto':/^\d+(\.\d+)?$/.test(v)?`${v}px`:v}); });
   $('#gapValue').addEventListener('input', e => setStylePatch({gap:`${Number(e.target.value)||0}px`}));
-  $('#paddingValue').addEventListener('input', e => setStylePatch({padding:`${Number(e.target.value)||0}px`}));
-  $('#marginValue').addEventListener('input', e => setStylePatch({margin:`${Number(e.target.value)||0}px`}));
+  function applySpacing(kind,side,raw){ if(!selected||raw===''||!Number.isFinite(Number(raw)))return; const patch={}; (spacingLinked[kind]?['top','right','bottom','left']:[side]).forEach(s=>patch[kind+'-'+s]=Number(raw)+'px'); setStylePatch(patch); if(spacingLinked[kind])refreshInspector(); }
+  [['padding','Top'],['padding','Right'],['padding','Bottom'],['padding','Left'],['margin','Top'],['margin','Right'],['margin','Bottom'],['margin','Left']].forEach(([kind,side])=>$('#'+kind+side+'Value').addEventListener('input',e=>applySpacing(kind,side.toLowerCase(),e.target.value)));
+  all('.spacing-link').forEach(button=>button.addEventListener('click',()=>{const kind=button.dataset.spacing;spacingLinked[kind]=!spacingLinked[kind];button.classList.toggle('active',spacingLinked[kind]);button.textContent=spacingLinked[kind]?'Vinculado':'Independente';}));
+  $('#fontSizeValue').addEventListener('input',e=>setStylePatch({'font-size':(Number(e.target.value)||0)+'px'})); $('#lineHeightValue').addEventListener('input',e=>setStylePatch({'line-height':(Number(e.target.value)||0)+'px'})); $('#letterSpacingValue').addEventListener('input',e=>setStylePatch({'letter-spacing':(Number(e.target.value)||0)+'px'})); $('#fontWeightValue').addEventListener('change',e=>setStylePatch({'font-weight':e.target.value})); $('#textAlignValue').addEventListener('change',e=>setStylePatch({'text-align':e.target.value}));
   $('#directionValue').addEventListener('change', e => {
     const v=e.target.value;
     if(v==='overlay') setStylePatch({display:'grid','flex-direction':'','position':'relative'});
@@ -1043,6 +1051,12 @@
   $('#radiusValue').addEventListener('input', e => setStylePatch({'border-radius':`${Number(e.target.value)||0}px`}));
   $('#opacityValue').addEventListener('input', e => setStylePatch({opacity:String(Math.max(0,Math.min(100,Number(e.target.value)||0))/100)}));
   $('#overflowValue').addEventListener('change', e => setStylePatch({overflow:e.target.value}));
+
+  const APPEARANCE_PROPERTIES=['width','height','gap','padding-top','padding-right','padding-bottom','padding-left','margin-top','margin-right','margin-bottom','margin-left','font-size','font-weight','line-height','letter-spacing','text-align','color','background-color','border-width','border-style','border-color','border-radius','opacity','overflow','align-items','justify-content'];
+  $('#copyAppearanceBtn').addEventListener('click',()=>{if(!selected)return;const style=selected.getStyle?.()||{};appearanceClipboard={};APPEARANCE_PROPERTIES.forEach(k=>{if(style[k]!==undefined&&style[k]!=='')appearanceClipboard[k]=style[k];});$('#pasteAppearanceBtn').disabled=false;flash('Aparência copiada');});
+  $('#pasteAppearanceBtn').addEventListener('click',()=>{if(!selected||!appearanceClipboard)return;selected.addStyle({...appearanceClipboard});schedulePersist();refreshInspector();flash('Aparência colada');});
+  function setInteractionMode(mode){interactionMode=mode==='navigate'?'navigate':'edit';all('#interactionMode button').forEach(b=>b.classList.toggle('active',b.dataset.mode===interactionMode));$('#gjs').classList.toggle('navigate-mode',interactionMode==='navigate');if(interactionMode==='navigate')clearSelection();}
+  $('#interactionMode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]');if(b)setInteractionMode(b.dataset.mode);});
 
   function componentIndex(cmp) {
     const p=cmp.parent(); if(!p) return -1; return p.components().indexOf(cmp);
@@ -1061,7 +1075,7 @@
   });
   $('#deleteBtn').addEventListener('click',()=>{ if(selected){ const doomed=selected; selected=null; doomed.remove(); schedulePersist(); refreshInspector(); renderLayers(); }});
 
-  editor.on('component:selected', cmp => { selected=cmp; refreshInspector(); renderLayers(); });
+  editor.on('component:selected', cmp => { if(interactionMode==='navigate'){editor.select(null);return;} selected=cmp; refreshInspector(); renderLayers(); });
   editor.on('component:deselected', () => { selected=null; refreshInspector(); renderLayers(); });
   editor.on('update', schedulePersist);
 
@@ -1158,9 +1172,8 @@
       }
 
       const point = outerTouchPoint(event.touches[0], sourceWindow);
-      mode = 'pan';
-      startPoint = point;
-      lastPoint = point;
+      if(interactionMode!=='navigate'){mode=null;startPoint=null;lastPoint=null;return;}
+      mode = 'pan'; startPoint = point; lastPoint = point;
     };
 
     const move = event => {
