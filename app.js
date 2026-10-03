@@ -14,24 +14,46 @@
   let sheetCollapsed = false;
   let importMode = 'html';
   let importedHeadExtras = '';
-  const BackupClient = window.UiCloudBackup?.CloudBackupClient || class {
-    constructor(store) { this.store=store; this.listeners=new Set(); this.settings=this.read(); store.subscribe(()=>this.markDirty()); window.addEventListener('online',()=>this.tryAutomatic()); this.timer=setInterval(()=>this.tryAutomatic(),60000); }
-    read() { try { return {version:1,endpoint:'',dirty:false,lastBackupAt:'',lastError:'',...JSON.parse(localStorage.getItem('ui-builder-cloud-backup-v1')||'{}')}; } catch (_) { return {version:1,endpoint:'',dirty:false,lastBackupAt:'',lastError:''}; } }
-    write(next) { this.settings={...this.settings,...next};localStorage.setItem('ui-builder-cloud-backup-v1',JSON.stringify(this.settings));this.emit(); }
-    subscribe(listener) { this.listeners.add(listener);return()=>this.listeners.delete(listener); }
-    emit() { this.listeners.forEach(listener=>{try{listener(this.status());}catch(_){}}); }
-    status() { return JSON.parse(JSON.stringify({...this.settings,online:navigator.onLine})); }
-    setEndpoint(endpoint) { const value=String(endpoint||'').trim().replace(/\/$/,'');if(value&&!/^https:\/\//i.test(value))throw new Error('Use uma URL HTTPS do Worker.');this.write({endpoint:value,lastError:''}); }
-    markDirty() { this.write({dirty:true});this.tryAutomatic(); }
-    async makeSnapshot() { const snapshot=this.store.createLibrarySnapshot();const source=new TextEncoder().encode(JSON.stringify(snapshot));const hash=await crypto.subtle.digest('SHA-256',source);snapshot.integrity={algorithm:'SHA-256',value:[...new Uint8Array(hash)].map(byte=>byte.toString(16).padStart(2,'0')).join('')};return snapshot; }
-    async request(path,options={}) { if(!this.settings.endpoint)throw new Error('Configure o endereço protegido do backup primeiro.');const response=await fetch(`${this.settings.endpoint}${path}`,{credentials:'include',...options});if(!response.ok)throw new Error(response.status===401||response.status===403?'Autenticação Cloudflare necessária.':`Backup indisponível (${response.status}).`);return response; }
-    async backupNow() { if(!navigator.onLine)throw new Error('Sem conexão. O backup continua pendente.');const snapshot=await this.makeSnapshot();try{await this.request('/backups',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(snapshot)});this.write({dirty:false,lastBackupAt:new Date().toISOString(),lastError:''});}catch(error){this.write({dirty:true,lastError:error.message||'Falha no backup.'});throw error;} }
-    async tryAutomatic() { const {dirty,lastBackupAt,endpoint}=this.settings;if(!dirty||!endpoint||!navigator.onLine||(lastBackupAt&&Date.now()-Date.parse(lastBackupAt)<900000))return;try{await this.backupNow();}catch(_){ } }
-    async listBackups() { return (await this.request('/backups')).json(); }
-    async getBackup(id) { return (await this.request(`/backups/${encodeURIComponent(id)}`)).json(); }
+  const LocalBackupClient = class {
+    constructor(store) {
+      this.store = store;
+      this.listeners = new Set();
+      this.settings = this.read();
+      store.subscribe(() => this.markDirty());
+    }
+    read() {
+      try {
+        return { version: 1, dirty: false, lastBackupAt: '', lastBackupName: '', ...JSON.parse(localStorage.getItem('ui-builder-local-backup-v1') || '{}') };
+      } catch (_) {
+        return { version: 1, dirty: false, lastBackupAt: '', lastBackupName: '' };
+      }
+    }
+    write(next) {
+      this.settings = { ...this.settings, ...next };
+      localStorage.setItem('ui-builder-local-backup-v1', JSON.stringify(this.settings));
+      this.emit();
+    }
+    subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    emit() { this.listeners.forEach(listener => { try { listener(this.status()); } catch (_) {} }); }
+    status() { return JSON.parse(JSON.stringify(this.settings)); }
+    markDirty() { this.write({ dirty: true }); }
+    makeSnapshot() { return this.store.createLibrarySnapshot(); }
+    backupNow() {
+      const snapshot = this.makeSnapshot();
+      const stamp = snapshot.createdAt.replace(/[:.]/g, '-');
+      const filename = `ui-builder-library-backup-${stamp}.json`;
+      downloadText(filename, JSON.stringify(snapshot, null, 2));
+      this.write({ dirty: false, lastBackupAt: snapshot.createdAt, lastBackupName: filename });
+      return { snapshot, filename };
+    }
+    restoreFromSnapshot(snapshot) {
+      const result = this.store.restoreLibrarySnapshot(snapshot);
+      this.write({ dirty: false, lastBackupAt: snapshot.createdAt || '', lastBackupName: '' });
+      return result;
+    }
   };
   const libraryStore = new window.UiLibraryStore.LocalLibraryStore();
-  const cloudBackup = new BackupClient(libraryStore);
+  const localBackup = new LocalBackupClient(libraryStore);
   let currentProjectId = null;
   let currentComponentId = null;
   let libraryView = 'projects';
@@ -349,60 +371,46 @@
     }
   });
 
-  function backupStatusText(status = cloudBackup.status()) {
-    if (!status.endpoint) return 'Não configurado';
-    if (!status.online) return 'Backup pendente — sem conexão';
-    if (status.lastError) return 'Falha no último backup';
-    if (status.dirty) return 'Alterações aguardando backup';
-    return status.lastBackupAt ? `Atualizado ${formatDate(status.lastBackupAt)}` : 'Pronto para o primeiro backup';
+  function backupStatusText(status = localBackup.status()) {
+    if (status.dirty) return 'Alterações ainda não exportadas';
+    return status.lastBackupAt ? `Último backup ${formatDate(status.lastBackupAt)}` : 'Nenhum backup local criado';
   }
   function renderBackupStatus(status) { $('#backupStatus').textContent = backupStatusText(status); }
-  function renderBackupList(backups) {
-    const list = $('#backupList'); list.innerHTML = '';
-    if (!backups?.length) { list.textContent = 'Nenhum backup disponível.'; return; }
-    backups.forEach(item => {
-      const row = document.createElement('article'); row.className = 'backup-item';
-      const details = document.createElement('div');
-      const title = document.createElement('strong'); title.textContent = formatDate(item.createdAt || item.uploaded) || 'Backup';
-      const meta = document.createElement('span'); meta.textContent = `${item.projectCount || 0} projeto(s) · ${item.componentCount || 0} componente(s)`;
-      details.append(title, meta);
-      const restore = document.createElement('button'); restore.type = 'button'; restore.textContent = 'Restaurar';
-      restore.addEventListener('click', async () => {
-        if (!confirm('Restaurar este backup substituirá a Biblioteca local atual. Uma cópia local de segurança será criada antes. Continuar?')) return;
-        try {
-          const snapshot = await cloudBackup.getBackup(item.id);
-          libraryStore.restoreLibrarySnapshot(snapshot);
-          $('#backupModal').classList.add('hidden'); renderLibrary();
-          flash('Biblioteca restaurada. A cópia anterior ficou guardada localmente.');
-        } catch (error) { $('#backupDetail').textContent = error.message || 'Não foi possível restaurar.'; }
-      });
-      row.append(details, restore); list.appendChild(row);
-    });
-  }
   function openBackupModal() {
-    const status = cloudBackup.status();
-    $('#backupEndpointInput').value = status.endpoint || '';
-    $('#backupDetail').textContent = backupStatusText(status);
-    $('#backupList').innerHTML = '';
+    const status = localBackup.status();
+    $('#backupDetail').textContent = status.lastBackupName
+      ? `Último arquivo: ${status.lastBackupName}`
+      : 'Exporte uma cópia completa da Biblioteca e guarde no app Arquivos ou iCloud Drive.';
     $('#backupModal').classList.remove('hidden');
   }
   $('#openBackupBtn').addEventListener('click', openBackupModal);
   $('#closeBackupModal').addEventListener('click', () => $('#backupModal').classList.add('hidden'));
-  $('#saveBackupEndpoint').addEventListener('click', () => {
-    try { cloudBackup.setEndpoint($('#backupEndpointInput').value); $('#backupDetail').textContent = 'Conexão salva neste dispositivo. A autenticação é feita pelo Cloudflare Access.'; }
-    catch (error) { $('#backupDetail').textContent = error.message || 'Endereço inválido.'; }
+  $('#backupNowBtn').addEventListener('click', () => {
+    try {
+      const { filename } = localBackup.backupNow();
+      $('#backupDetail').textContent = `Backup criado: ${filename}`;
+      flash('Backup local criado. Salve o arquivo em um local seguro.');
+    } catch (error) {
+      $('#backupDetail').textContent = error.message || 'Não foi possível criar o backup.';
+    }
   });
-  $('#backupNowBtn').addEventListener('click', async () => {
-    $('#backupDetail').textContent = 'Criando e enviando backup…';
-    try { await cloudBackup.backupNow(); $('#backupDetail').textContent = 'Backup concluído.'; }
-    catch (error) { $('#backupDetail').textContent = error.message || 'Backup pendente.'; }
+  $('#restoreBackupFile').addEventListener('change', async event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const snapshot = JSON.parse(await file.text());
+      libraryStore.validateLibrarySnapshot(snapshot);
+      if (!confirm('Restaurar este backup substituirá a Biblioteca local atual. Uma cópia de segurança do estado atual será preservada neste dispositivo. Continuar?')) return;
+      localBackup.restoreFromSnapshot(snapshot);
+      $('#backupModal').classList.add('hidden');
+      renderLibrary();
+      flash('Biblioteca restaurada. O estado anterior ficou preservado localmente para recuperação.');
+    } catch (error) {
+      $('#backupDetail').textContent = error.message || 'Arquivo de backup inválido.';
+    }
   });
-  $('#listBackupsBtn').addEventListener('click', async () => {
-    $('#backupDetail').textContent = 'Carregando backups…';
-    try { const data = await cloudBackup.listBackups(); renderBackupList(data.backups); $('#backupDetail').textContent = `${data.backups?.length || 0} backup(s) disponível(is).`; }
-    catch (error) { $('#backupDetail').textContent = error.message || 'Não foi possível listar backups.'; }
-  });
-  cloudBackup.subscribe(renderBackupStatus);
+  localBackup.subscribe(renderBackupStatus);
   renderBackupStatus();
 
   function libraryRow({ title, id, meta, onOpen, onRename, onDuplicate, onExport, onDelete }) {
