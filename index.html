@@ -18,6 +18,7 @@
 <body>
   <section id="libraryScreen" class="library-screen" aria-label="Biblioteca">
     <header class="library-header"><div><p class="eyebrow">UI Builder</p><h1 id="libraryTitle">Biblioteca</h1><p id="librarySubtitle">Seus projetos</p></div><button id="libraryBackBtn" class="icon-btn hidden" aria-label="Voltar">‹</button></header>
+    <section id="backupCard" class="backup-card"><div><strong>Backup</strong><p id="backupStatus">Não configurado</p></div><button id="openBackupBtn" type="button">Gerenciar</button></section>
     <main id="libraryContent" class="library-content"></main>
     <div class="library-actions"><button id="libraryPrimaryBtn">Novo projeto</button><button id="importProjectBtn" class="secondary">Importar projeto</button><input id="importProjectFile" type="file" accept=".uiproject,application/json" hidden><input id="importComponentFile" type="file" accept=".uicomp,application/json" hidden></div>
   </section>
@@ -277,7 +278,19 @@
     <div class="modal-card entity-modal-card"><div class="modal-head"><h2>Inserir componente</h2><button class="icon-btn" id="closeComponentPicker" aria-label="Fechar">×</button></div><p class="import-help">Isso cria uma instância; a definição original continua sendo uma só.</p><div id="componentPickerList" class="library-content"></div></div>
   </div>
 
+  <div class="modal hidden" id="backupModal">
+    <div class="modal-card backup-modal-card">
+      <div class="modal-head"><h2>Backup em nuvem</h2><button class="icon-btn" id="closeBackupModal" aria-label="Fechar">×</button></div>
+      <p class="import-help">A Biblioteca continua local. O backup é uma cópia segura no Cloudflare R2.</p>
+      <label class="field"><span>Endereço protegido do Worker</span><input id="backupEndpointInput" type="url" inputmode="url" autocapitalize="off" placeholder="https://backup.seudominio.com" /></label>
+      <p id="backupDetail" class="import-help"></p>
+      <div class="action-row"><button id="saveBackupEndpoint" type="button">Salvar conexão</button><button id="backupNowBtn" type="button">Fazer backup agora</button><button id="listBackupsBtn" type="button">Restaurar backup</button></div>
+      <div id="backupList" class="backup-list"></div>
+    </div>
+  </div>
+
   <script src="library-store.js"></script>
+  <script src="backup-client.js"></script>
   <script>
     (() => {
       const showError = () => {
