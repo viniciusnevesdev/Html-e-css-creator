@@ -19,8 +19,14 @@
   <section id="libraryScreen" class="library-screen" aria-label="Biblioteca">
     <header class="library-header"><div><p class="eyebrow">UI Builder</p><h1 id="libraryTitle">Biblioteca</h1><p id="librarySubtitle">Seus projetos</p></div><button id="libraryBackBtn" class="icon-btn hidden" aria-label="Voltar">‹</button></header>
     <section id="backupCard" class="backup-card"><div><strong>Backup</strong><p id="backupStatus">Nenhum backup local criado</p></div><button id="openBackupBtn" type="button">Gerenciar</button></section>
-    <main id="libraryContent" class="library-content"></main>
-    <div class="library-actions"><button id="libraryPrimaryBtn">Novo projeto</button><button id="importProjectBtn" class="secondary">Importar projeto</button><input id="importProjectFile" type="file" accept=".uiproject,application/json" hidden><input id="importComponentFile" type="file" accept=".uicomp,application/json" hidden></div>
+    <section class="library-projects-section">
+      <div class="library-projects-head">
+        <h2>Projetos</h2>
+        <button id="importProjectBtn" class="library-import-btn" type="button">Importar projeto</button>
+      </div>
+      <main id="libraryContent" class="library-content"></main>
+    </section>
+    <div class="library-actions"><button id="libraryPrimaryBtn">Novo projeto</button><input id="importProjectFile" type="file" accept=".uiproject,application/json" hidden><input id="importComponentFile" type="file" accept=".uicomp,application/json" hidden></div>
   </section>
   <div id="app">
     <header class="topbar">
