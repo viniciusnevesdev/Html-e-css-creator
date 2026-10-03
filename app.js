@@ -15,6 +15,7 @@
   let importMode = 'html';
   let importedHeadExtras = '';
   const libraryStore = new window.UiLibraryStore.LocalLibraryStore();
+  const cloudBackup = new window.UiCloudBackup.CloudBackupClient(libraryStore);
   let currentProjectId = null;
   let currentComponentId = null;
   let libraryView = 'projects';
@@ -331,6 +332,62 @@
       $('#entityModalHelp').textContent = error.message || 'Não foi possível salvar.';
     }
   });
+
+  function backupStatusText(status = cloudBackup.status()) {
+    if (!status.endpoint) return 'Não configurado';
+    if (!status.online) return 'Backup pendente — sem conexão';
+    if (status.lastError) return 'Falha no último backup';
+    if (status.dirty) return 'Alterações aguardando backup';
+    return status.lastBackupAt ? `Atualizado ${formatDate(status.lastBackupAt)}` : 'Pronto para o primeiro backup';
+  }
+  function renderBackupStatus(status) { $('#backupStatus').textContent = backupStatusText(status); }
+  function renderBackupList(backups) {
+    const list = $('#backupList'); list.innerHTML = '';
+    if (!backups?.length) { list.textContent = 'Nenhum backup disponível.'; return; }
+    backups.forEach(item => {
+      const row = document.createElement('article'); row.className = 'backup-item';
+      const details = document.createElement('div');
+      const title = document.createElement('strong'); title.textContent = formatDate(item.createdAt || item.uploaded) || 'Backup';
+      const meta = document.createElement('span'); meta.textContent = `${item.projectCount || 0} projeto(s) · ${item.componentCount || 0} componente(s)`;
+      details.append(title, meta);
+      const restore = document.createElement('button'); restore.type = 'button'; restore.textContent = 'Restaurar';
+      restore.addEventListener('click', async () => {
+        if (!confirm('Restaurar este backup substituirá a Biblioteca local atual. Uma cópia local de segurança será criada antes. Continuar?')) return;
+        try {
+          const snapshot = await cloudBackup.getBackup(item.id);
+          libraryStore.restoreLibrarySnapshot(snapshot);
+          $('#backupModal').classList.add('hidden'); renderLibrary();
+          flash('Biblioteca restaurada. A cópia anterior ficou guardada localmente.');
+        } catch (error) { $('#backupDetail').textContent = error.message || 'Não foi possível restaurar.'; }
+      });
+      row.append(details, restore); list.appendChild(row);
+    });
+  }
+  function openBackupModal() {
+    const status = cloudBackup.status();
+    $('#backupEndpointInput').value = status.endpoint || '';
+    $('#backupDetail').textContent = backupStatusText(status);
+    $('#backupList').innerHTML = '';
+    $('#backupModal').classList.remove('hidden');
+  }
+  $('#openBackupBtn').addEventListener('click', openBackupModal);
+  $('#closeBackupModal').addEventListener('click', () => $('#backupModal').classList.add('hidden'));
+  $('#saveBackupEndpoint').addEventListener('click', () => {
+    try { cloudBackup.setEndpoint($('#backupEndpointInput').value); $('#backupDetail').textContent = 'Conexão salva neste dispositivo. A autenticação é feita pelo Cloudflare Access.'; }
+    catch (error) { $('#backupDetail').textContent = error.message || 'Endereço inválido.'; }
+  });
+  $('#backupNowBtn').addEventListener('click', async () => {
+    $('#backupDetail').textContent = 'Criando e enviando backup…';
+    try { await cloudBackup.backupNow(); $('#backupDetail').textContent = 'Backup concluído.'; }
+    catch (error) { $('#backupDetail').textContent = error.message || 'Backup pendente.'; }
+  });
+  $('#listBackupsBtn').addEventListener('click', async () => {
+    $('#backupDetail').textContent = 'Carregando backups…';
+    try { const data = await cloudBackup.listBackups(); renderBackupList(data.backups); $('#backupDetail').textContent = `${data.backups?.length || 0} backup(s) disponível(is).`; }
+    catch (error) { $('#backupDetail').textContent = error.message || 'Não foi possível listar backups.'; }
+  });
+  cloudBackup.subscribe(renderBackupStatus);
+  renderBackupStatus();
 
   function libraryRow({ title, id, meta, onOpen, onRename, onDuplicate, onExport, onDelete }) {
     const row = document.createElement('article'); row.className = 'library-row';
