@@ -14,10 +14,24 @@
   let sheetCollapsed = false;
   let importMode = 'html';
   let importedHeadExtras = '';
+  const BackupClient = window.UiCloudBackup?.CloudBackupClient || class {
+    constructor(store) { this.store=store; this.listeners=new Set(); this.settings=this.read(); store.subscribe(()=>this.markDirty()); window.addEventListener('online',()=>this.tryAutomatic()); this.timer=setInterval(()=>this.tryAutomatic(),60000); }
+    read() { try { return {version:1,endpoint:'',dirty:false,lastBackupAt:'',lastError:'',...JSON.parse(localStorage.getItem('ui-builder-cloud-backup-v1')||'{}')}; } catch (_) { return {version:1,endpoint:'',dirty:false,lastBackupAt:'',lastError:''}; } }
+    write(next) { this.settings={...this.settings,...next};localStorage.setItem('ui-builder-cloud-backup-v1',JSON.stringify(this.settings));this.emit(); }
+    subscribe(listener) { this.listeners.add(listener);return()=>this.listeners.delete(listener); }
+    emit() { this.listeners.forEach(listener=>{try{listener(this.status());}catch(_){}}); }
+    status() { return JSON.parse(JSON.stringify({...this.settings,online:navigator.onLine})); }
+    setEndpoint(endpoint) { const value=String(endpoint||'').trim().replace(/\/$/,'');if(value&&!/^https:\/\//i.test(value))throw new Error('Use uma URL HTTPS do Worker.');this.write({endpoint:value,lastError:''}); }
+    markDirty() { this.write({dirty:true});this.tryAutomatic(); }
+    async makeSnapshot() { const snapshot=this.store.createLibrarySnapshot();const source=new TextEncoder().encode(JSON.stringify(snapshot));const hash=await crypto.subtle.digest('SHA-256',source);snapshot.integrity={algorithm:'SHA-256',value:[...new Uint8Array(hash)].map(byte=>byte.toString(16).padStart(2,'0')).join('')};return snapshot; }
+    async request(path,options={}) { if(!this.settings.endpoint)throw new Error('Configure o endereço protegido do backup primeiro.');const response=await fetch(`${this.settings.endpoint}${path}`,{credentials:'include',...options});if(!response.ok)throw new Error(response.status===401||response.status===403?'Autenticação Cloudflare necessária.':`Backup indisponível (${response.status}).`);return response; }
+    async backupNow() { if(!navigator.onLine)throw new Error('Sem conexão. O backup continua pendente.');const snapshot=await this.makeSnapshot();try{await this.request('/backups',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(snapshot)});this.write({dirty:false,lastBackupAt:new Date().toISOString(),lastError:''});}catch(error){this.write({dirty:true,lastError:error.message||'Falha no backup.'});throw error;} }
+    async tryAutomatic() { const {dirty,lastBackupAt,endpoint}=this.settings;if(!dirty||!endpoint||!navigator.onLine||(lastBackupAt&&Date.now()-Date.parse(lastBackupAt)<900000))return;try{await this.backupNow();}catch(_){ } }
+    async listBackups() { return (await this.request('/backups')).json(); }
+    async getBackup(id) { return (await this.request(`/backups/${encodeURIComponent(id)}`)).json(); }
+  };
   const libraryStore = new window.UiLibraryStore.LocalLibraryStore();
-  const cloudBackup = window.UiCloudBackup?.CloudBackupClient
-    ? new window.UiCloudBackup.CloudBackupClient(libraryStore)
-    : { status: () => ({ endpoint:'', dirty:false, lastBackupAt:'', lastError:'Módulo de backup indisponível. Recarregue o app.' }), subscribe: () => () => {}, setEndpoint: () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, backupNow: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, listBackups: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, getBackup: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); } };
+  const cloudBackup = new BackupClient(libraryStore);
   let currentProjectId = null;
   let currentComponentId = null;
   let libraryView = 'projects';
