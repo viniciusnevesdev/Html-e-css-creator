@@ -1,0 +1,11 @@
+name = "ui-builder-backup"
+main = "src/index.js"
+compatibility_date = "2026-10-03"
+workers_dev = false
+
+# Substitua pelo hostname real protegido pelo Cloudflare Access.
+routes = [{ pattern = "backup.SEUDOMINIO.com/*", custom_domain = true }]
+
+[[r2_buckets]]
+binding = "UI_BUILDER_BACKUPS"
+bucket_name = "ui-builder-backups"
