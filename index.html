@@ -16,9 +16,15 @@
   <script>window.__APP_BUILD__='__BUILD_ID__';</script>
 </head>
 <body>
+  <section id="libraryScreen" class="library-screen" aria-label="Biblioteca">
+    <header class="library-header"><div><p class="eyebrow">UI Builder</p><h1 id="libraryTitle">Biblioteca</h1><p id="librarySubtitle">Seus projetos</p></div><button id="libraryBackBtn" class="icon-btn hidden" aria-label="Voltar">‹</button></header>
+    <main id="libraryContent" class="library-content"></main>
+    <div class="library-actions"><button id="libraryPrimaryBtn">Novo projeto</button><button id="importProjectBtn" class="secondary">Importar projeto</button><input id="importProjectFile" type="file" accept=".uiproject,application/json" hidden><input id="importComponentFile" type="file" accept=".uicomp,application/json" hidden></div>
+  </section>
   <div id="app">
     <header class="topbar">
       <div class="topbar-group">
+        <button class="icon-btn" id="libraryBtn" aria-label="Biblioteca">⌂</button>
         <button class="icon-btn" id="undoBtn" aria-label="Desfazer"><svg class="ui-icon" viewBox="0 0 19.3516 18.5547" width="24" height="24" aria-hidden="true">
   <g>
     <rect height="18.5547" opacity="0" width="19.3516" x="0" y="0"/>
@@ -103,6 +109,7 @@
 </svg></span><b>Spacer</b></button>
             <button class="component-card" data-add="divider"><span>—</span><b>Divisor</b></button>
           </div>
+          <button class="component-card" id="insertProjectComponent"><span>⊞</span><b>Inserir componente do projeto</b></button>
         </div>
 
         <div class="panel" data-panel="layers">
@@ -124,6 +131,11 @@
 </svg></button></div></div>
           <div id="inspectorEmpty" class="empty-state">Toque em um elemento na tela para editar.</div>
           <div id="inspector" class="inspector hidden">
+            <div class="section-title">Identidade</div>
+            <label class="field full-field"><span>Nome amigável</span><input id="friendlyNameValue" type="text" placeholder="Ex.: Título do evento" /></label>
+            <label class="field full-field"><span>ID técnico do elemento</span><input id="elementIdValue" type="text" autocapitalize="off" placeholder="Ex.: event-title" /></label>
+            <div class="field full-field identity-readout"><span>Tipo e referência</span><strong id="identityInfo">—</strong><div class="action-row"><button type="button" id="copyIdBtn">Copiar ID</button><button type="button" id="copyReferenceBtn">Copiar referência</button></div></div>
+            <div class="action-row full-field"><button type="button" id="createComponentBtn">Criar componente desta seleção</button></div>
             <label class="field full-field" id="textFieldWrap">
               <span>Texto</span>
               <input id="textValue" type="text" autocomplete="off" />
@@ -251,14 +263,23 @@
     </div>
   </div>
 
+  <div class="modal hidden" id="entityModal">
+    <div class="modal-card entity-modal-card">
+      <div class="modal-head"><h2 id="entityModalTitle">Novo projeto</h2><button class="icon-btn" id="closeEntityModal" aria-label="Fechar">×</button></div>
+      <p id="entityModalHelp" class="import-help"></p>
+      <label class="field"><span>Nome amigável</span><input id="entityNameInput" type="text" /></label>
+      <label class="field" id="entityIdWrap"><span>ID técnico</span><input id="entityIdInput" type="text" autocapitalize="off" /></label>
+      <div class="action-row"><button id="confirmEntityBtn">Salvar</button></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="componentPickerModal">
+    <div class="modal-card entity-modal-card"><div class="modal-head"><h2>Inserir componente</h2><button class="icon-btn" id="closeComponentPicker" aria-label="Fechar">×</button></div><p class="import-help">Isso cria uma instância; a definição original continua sendo uma só.</p><div id="componentPickerList" class="library-content"></div></div>
+  </div>
+
+  <script src="library-store.js"></script>
   <script>
     (() => {
-      const sources = [
-        'https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/grapes.min.js',
-        'https://unpkg.com/grapesjs@0.22.12/dist/grapes.min.js'
-      ];
-      let index = 0;
-
       const showError = () => {
         const box = document.createElement('div');
         box.style.cssText = 'position:fixed;inset:90px 16px auto;z-index:200;background:#2c2c2e;color:#fff;padding:16px;border-radius:16px;font:14px -apple-system,BlinkMacSystemFont,sans-serif';
@@ -272,6 +293,12 @@
         app.onerror = showError;
         document.body.appendChild(app);
       };
+
+      const sources = [
+        'https://cdnjs.cloudflare.com/ajax/libs/grapesjs/0.22.12/grapes.min.js',
+        'https://unpkg.com/grapesjs@0.22.12/dist/grapes.min.js'
+      ];
+      let index = 0;
 
       const loadNext = () => {
         if (window.grapesjs) return loadApp();
