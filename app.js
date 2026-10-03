@@ -15,7 +15,9 @@
   let importMode = 'html';
   let importedHeadExtras = '';
   const libraryStore = new window.UiLibraryStore.LocalLibraryStore();
-  const cloudBackup = new window.UiCloudBackup.CloudBackupClient(libraryStore);
+  const cloudBackup = window.UiCloudBackup?.CloudBackupClient
+    ? new window.UiCloudBackup.CloudBackupClient(libraryStore)
+    : { status: () => ({ endpoint:'', dirty:false, lastBackupAt:'', lastError:'Módulo de backup indisponível. Recarregue o app.' }), subscribe: () => () => {}, setEndpoint: () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, backupNow: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, listBackups: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); }, getBackup: async () => { throw new Error('Módulo de backup indisponível. Recarregue o app.'); } };
   let currentProjectId = null;
   let currentComponentId = null;
   let libraryView = 'projects';
