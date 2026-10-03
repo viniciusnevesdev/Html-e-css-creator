@@ -70,6 +70,7 @@
             <button type="button" id="zoomValue" class="zoom-value" aria-label="Restaurar zoom para 100%">100%</button>
             <button type="button" id="zoomInBtn" aria-label="Aumentar zoom">＋</button>
           </div>
+          <div class="device-switch edit-mode-switch" id="interactionMode" aria-label="Modo de interação"><button type="button" data-mode="edit" class="active">Editar</button><button type="button" data-mode="navigate">Navegar</button></div>
         </div>
         <div id="gjs"></div>
       </div>
@@ -155,8 +156,10 @@
             <label class="field" id="widthValueWrap"><span>Largura</span><input id="widthValue" type="number" min="0" inputmode="decimal" /></label>
             <label class="field"><span>Altura</span><input id="heightValue" type="text" placeholder="auto ou 120" /></label>
             <label class="field"><span>Gap</span><input id="gapValue" type="number" min="0" inputmode="decimal" /></label>
-            <label class="field"><span>Padding</span><input id="paddingValue" type="number" min="0" inputmode="decimal" /></label>
-            <label class="field"><span>Margin</span><input id="marginValue" type="number" min="0" inputmode="decimal" /></label>
+            <div class="spacing-group full-field"><div class="spacing-head"><strong>Padding</strong><button type="button" class="spacing-link active" data-spacing="padding">Vinculado</button></div><div class="spacing-grid">
+<label class="field"><span>Top</span><input id="paddingTopValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Right</span><input id="paddingRightValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Bottom</span><input id="paddingBottomValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Left</span><input id="paddingLeftValue" type="number" min="0" inputmode="decimal" /></label></div></div>
+<div class="spacing-group full-field"><div class="spacing-head"><strong>Margin</strong><button type="button" class="spacing-link active" data-spacing="margin">Vinculado</button></div><div class="spacing-grid">
+<label class="field"><span>Top</span><input id="marginTopValue" type="number" inputmode="decimal" /></label><label class="field"><span>Right</span><input id="marginRightValue" type="number" inputmode="decimal" /></label><label class="field"><span>Bottom</span><input id="marginBottomValue" type="number" inputmode="decimal" /></label><label class="field"><span>Left</span><input id="marginLeftValue" type="number" inputmode="decimal" /></label></div></div>
 
             <label class="field full-field"><span>Direção</span>
               <select id="directionValue"><option value="column">Vertical</option><option value="row">Horizontal</option><option value="overlay">Sobreposição</option></select>
@@ -168,7 +171,9 @@
               <select id="justifyValue"><option value="flex-start">Início</option><option value="center">Centro</option><option value="flex-end">Fim</option><option value="space-between">Espaçar</option></select>
             </label>
 
-            <div class="section-title">Aparência</div>
+            <div class="section-title" id="typographyTitle">Tipografia</div><div id="typographyControls" class="typography-controls full-field">
+<label class="field"><span>Tamanho</span><input id="fontSizeValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Altura linha</span><input id="lineHeightValue" type="number" min="0" inputmode="decimal" /></label><label class="field"><span>Espaçamento letras</span><input id="letterSpacingValue" type="number" inputmode="decimal" /></label><label class="field"><span>Peso</span><select id="fontWeightValue"><option value="400">Regular</option><option value="500">Médio</option><option value="600">Semibold</option><option value="700">Bold</option><option value="800">Extra bold</option></select></label><label class="field full-field"><span>Alinhamento texto</span><select id="textAlignValue"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label></div>
+<div class="section-title">Aparência</div>
             <label class="field"><span>Fundo</span><input id="backgroundValue" type="color" value="#ffffff" /></label>
             <label class="field"><span>Texto</span><input id="colorValue" type="color" value="#ffffff" /></label>
             <label class="field"><span>Borda</span><input id="borderWidthValue" type="number" min="0" inputmode="decimal" /></label>
@@ -179,7 +184,7 @@
               <select id="overflowValue"><option value="visible">Visível</option><option value="hidden">Recortar</option><option value="auto">Scroll automático</option></select>
             </label>
 
-            <div class="section-title">Organização</div>
+            <div class="section-title">Aparência reutilizável</div><div class="action-row full-field"><button type="button" id="copyAppearanceBtn">Copiar aparência</button><button type="button" id="pasteAppearanceBtn" disabled>Colar aparência</button></div><div class="section-title">Organização</div>
             <div class="action-row">
               <button id="moveUpBtn">↑ Subir</button>
               <button id="moveDownBtn">↓ Descer</button>
