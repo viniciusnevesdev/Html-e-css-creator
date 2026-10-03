@@ -269,6 +269,13 @@
     if (!component) throw new Error('Componente não encontrado.');
     currentProjectId = projectId; currentComponentId = componentId;
     loadProject(component.document || {});
+    // Packages from other tools may contain only the documented HTML/CSS files.
+    // Rebuild them into an editable GrapesJS document on first open.
+    if (!component.document?.pages?.length && (component.componentHtml || component.componentCss)) {
+      const page = editor.Pages.getSelected() || editor.Pages.getAll()[0];
+      page.getMainComponent().components(component.componentHtml || `<main data-component="${component.id}"></main>`);
+      editor.setStyle(component.componentCss || '');
+    }
     importedHeadExtras = component.importedHeadExtras || component.document?.importedHeadExtras || '';
     const root = componentRoot();
     if (root && !root.getAttributes?.()?.['data-component']) root.addAttributes({'data-component': component.id});
@@ -316,8 +323,13 @@
   $('#closeEntityModal').addEventListener('click', closeEntityModal);
   $('#confirmEntityBtn').addEventListener('click', () => {
     if (!entityAction) return;
-    try { const action = entityAction; const data = { name: $('#entityNameInput').value.trim(), id: $('#entityIdInput').value.trim() }; closeEntityModal(); action(data); }
-    catch (error) { alert(error.message || 'Não foi possível salvar.'); }
+    const action = entityAction;
+    const data = { name: $('#entityNameInput').value.trim(), id: $('#entityIdInput').value.trim() };
+    try { action(data); closeEntityModal(); }
+    catch (error) {
+      console.error('Não foi possível salvar na biblioteca.', error);
+      $('#entityModalHelp').textContent = error.message || 'Não foi possível salvar.';
+    }
   });
 
   function libraryRow({ title, id, meta, onOpen, onRename, onDuplicate, onExport, onDelete }) {
