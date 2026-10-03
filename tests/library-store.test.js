@@ -28,5 +28,12 @@ store.renameProject(project.id, 'Crono principal');
 if (store.getProject(project.id).name !== 'Crono principal') throw new Error('Project rename failed');
 store.deleteComponent(project.id, component.id);
 if (store.getComponent(project.id, component.id)) throw new Error('Component delete failed');
+store.saveComponent(project.id, { id: 'day-header', name: 'Cabeçalho', document: { project: { pages: [] } }, componentHtml: '<header data-component="day-header"></header>', componentCss: '' });
+const snapshot = store.createLibrarySnapshot();
+if (snapshot.metadata.projectCount !== 2 || snapshot.metadata.componentCount !== 2) throw new Error('Library snapshot counts are incorrect');
+store.createProject({ id: 'temporary', name: 'Temporário' });
+const restored = store.restoreLibrarySnapshot(snapshot);
+if (store.getProject('temporary') || !store.getComponent(project.id, 'day-header')) throw new Error('Library restore failed');
+if (!restored.recovery.library.projects.some(item => item.id === 'temporary')) throw new Error('Restore did not create a local recovery copy');
 
-console.log('library-store: create, persist IDs, export/import collision, rename and delete passed');
+console.log('library-store: projects, semantic IDs, import collision, snapshot, restore and recovery passed');
