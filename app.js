@@ -14,6 +14,12 @@
   let sheetCollapsed = false;
   let importMode = 'html';
   let importedHeadExtras = '';
+  const libraryStore = new window.UiLibraryStore.LocalLibraryStore();
+  let currentProjectId = null;
+  let currentComponentId = null;
+  let libraryView = 'projects';
+  let openedLibraryProjectId = null;
+  let entityAction = null;
   const collapsedLayers = new Set();
   let viewportWidth = Number(localStorage.getItem(VIEWPORT_KEY)) === 430 ? 430 : 390;
   let canvasZoom = Math.max(20, Math.min(200, Number(localStorage.getItem(ZOOM_KEY)) || 100));
@@ -178,8 +184,8 @@
     migrateUiAttributes();
   }
 
-  function loadProject() {
-    const raw = localStorage.getItem(STORAGE_KEY);
+  function loadProject(savedDocument = null) {
+    const raw = savedDocument ? JSON.stringify(savedDocument) : localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
@@ -202,11 +208,18 @@
   }
 
   function persist(showFeedback = false) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    const document = {
       project: editor.getProjectData(),
       activePageId: editor.Pages.getSelected()?.get('id') || null,
       importedHeadExtras
-    }));
+    };
+    if (currentProjectId && currentComponentId) {
+      const existing = libraryStore.getComponent(currentProjectId, currentComponentId) || {};
+      libraryStore.saveComponent(currentProjectId, { ...existing, id: currentComponentId, document, ...componentPackageData(existing.name || currentComponentId) });
+    } else {
+      // Kept for compatibility until the first library migration has completed.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+    }
     if (showFeedback) {
       const btn = $('#saveBtn');
       const prev = btn.textContent;
@@ -220,7 +233,161 @@
     saveTimer = setTimeout(() => persist(false), 500);
   }
 
+  function componentRoot() {
+    const page = editor.Pages.getSelected();
+    const root = page?.getMainComponent?.();
+    return root?.components?.().at?.(0) || null;
+  }
+
+  function identityRows() {
+    const output = [];
+    const walk = cmp => cmp?.components?.().each(child => {
+      const attrs = child.getAttributes?.() || {};
+      if (attrs['data-element'] || attrs['data-component']) output.push({
+        id: attrs['data-element'] || attrs['data-component'], name: attrs['data-name'] || labelFor(child),
+        kind: attrs['data-component'] ? 'component' : 'element', dataUi: attrs['data-ui'] || ''
+      });
+      walk(child);
+    });
+    const root = editor.Pages.getSelected()?.getMainComponent?.();
+    walk(root);
+    return output;
+  }
+
+  function componentPackageData(name) {
+    const root = componentRoot();
+    const componentId = root?.getAttributes?.()?.['data-component'] || currentComponentId || '';
+    return {
+      componentManifest: { formatVersion: 1, id: componentId, name: name || componentId, elements: identityRows() },
+      componentHtml: editor.getHtml(),
+      componentCss: editor.getCss()
+    };
+  }
+
+  function loadComponentRecord(projectId, componentId) {
+    const component = libraryStore.getComponent(projectId, componentId);
+    if (!component) throw new Error('Componente não encontrado.');
+    currentProjectId = projectId; currentComponentId = componentId;
+    loadProject(component.document || {});
+    importedHeadExtras = component.importedHeadExtras || component.document?.importedHeadExtras || '';
+    const root = componentRoot();
+    if (root && !root.getAttributes?.()?.['data-component']) root.addAttributes({'data-component': component.id});
+    $('#app').classList.remove('hidden');
+    $('#libraryScreen').classList.add('hidden');
+    updatePageTitle(); refreshInspector(); renderLayers();
+  }
+
+  function makeBlankComponent(projectId, id, name) {
+    const record = libraryStore.saveComponent(projectId, { id, name, document: {}, importedHeadExtras: '', elementMeta: [] });
+    currentProjectId = projectId; currentComponentId = record.id;
+    loadProject({});
+    const page = editor.Pages.getSelected() || editor.Pages.getAll()[0];
+    const root = page.getMainComponent();
+    root.components(`<main class="page-root" data-component="${record.id}"><section class="ui-container" data-ui="container-v" style="display:flex;flex-direction:column;gap:12px;width:100%;min-height:100px;padding:12px"><div class="ui-text" data-ui="text" data-element="content">Novo componente</div></section></main>`);
+    persist(false);
+    $('#app').classList.remove('hidden'); $('#libraryScreen').classList.add('hidden');
+    updatePageTitle(); refreshInspector(); renderLayers();
+  }
+
+  function formatDate(value) {
+    if (!value) return '';
+    try { return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }).format(new Date(value)); } catch (_) { return ''; }
+  }
+  function escapeHtml(value) { const node = document.createElement('span'); node.textContent = String(value || ''); return node.innerHTML; }
+  function downloadText(filename, content, type = 'application/json') {
+    const blob = new Blob([content], { type }); const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob); link.download = filename; link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }
+  function componentEnvelope(component) {
+    return { format:'ui-builder-component', formatVersion:1, files:{
+      'component.json': component.componentManifest || { formatVersion:1, id:component.id, name:component.name, elements:[] },
+      'component.html': component.componentHtml || '', 'component.css': component.componentCss || ''
+    }, component:{ ...component, document: component.document || {} } };
+  }
+  function showEntityModal(options, onConfirm) {
+    entityAction = onConfirm;
+    $('#entityModalTitle').textContent = options.title; $('#entityModalHelp').textContent = options.help || '';
+    $('#entityNameInput').value = options.name || ''; $('#entityIdInput').value = options.id || '';
+    $('#entityIdWrap').classList.toggle('hidden', Boolean(options.hideId));
+    $('#entityModal').classList.remove('hidden'); setTimeout(() => $('#entityNameInput').focus(), 50);
+  }
+  function closeEntityModal() { $('#entityModal').classList.add('hidden'); entityAction = null; }
+  $('#closeEntityModal').addEventListener('click', closeEntityModal);
+  $('#confirmEntityBtn').addEventListener('click', () => {
+    if (!entityAction) return;
+    try { const action = entityAction; const data = { name: $('#entityNameInput').value.trim(), id: $('#entityIdInput').value.trim() }; closeEntityModal(); action(data); }
+    catch (error) { alert(error.message || 'Não foi possível salvar.'); }
+  });
+
+  function libraryRow({ title, id, meta, onOpen, onRename, onDuplicate, onExport, onDelete }) {
+    const row = document.createElement('article'); row.className = 'library-row';
+    const main = document.createElement('button'); main.className = 'library-row-main'; main.innerHTML = `<div class="library-row-title">${escapeHtml(title)}</div>${id ? `<div class="library-row-id">${escapeHtml(id)}</div>` : ''}${meta ? `<div class="library-row-meta">${escapeHtml(meta)}</div>` : ''}`; main.addEventListener('click', onOpen); row.appendChild(main);
+    const actions = document.createElement('div'); actions.className = 'library-row-actions';
+    [[onRename,'✎','Renomear'],[onDuplicate,'⧉','Duplicar'],[onExport,'⇩','Exportar'],[onDelete,'×','Excluir']].forEach(([handler,label,aria]) => { if (!handler) return; const button=document.createElement('button'); button.type='button';button.textContent=label;button.setAttribute('aria-label',aria);button.addEventListener('click',handler);actions.appendChild(button); });
+    row.appendChild(actions); return row;
+  }
+  function renderLibrary() {
+    const content = $('#libraryContent'); content.innerHTML = '';
+    const projectMode = libraryView === 'projects';
+    $('#libraryTitle').textContent = projectMode ? 'Biblioteca' : (libraryStore.getProject(openedLibraryProjectId)?.name || 'Projeto');
+    $('#librarySubtitle').textContent = projectMode ? 'Meus projetos' : 'Componentes';
+    $('#libraryBackBtn').classList.toggle('hidden', projectMode);
+    $('#libraryPrimaryBtn').textContent = projectMode ? 'Novo projeto' : 'Novo componente';
+    $('#importProjectBtn').textContent = projectMode ? 'Importar projeto' : 'Importar componente';
+    const items = projectMode ? libraryStore.listProjects() : libraryStore.listComponents(openedLibraryProjectId);
+    if (!items.length) { const empty=document.createElement('p');empty.className='library-empty';empty.textContent=projectMode ? 'Crie um projeto para organizar componentes relacionados.' : 'Crie ou importe o primeiro componente deste projeto.';content.appendChild(empty); }
+    items.forEach(item => {
+      if (projectMode) content.appendChild(libraryRow({ title:item.name, id:item.id, meta:`Atualizado ${formatDate(item.updatedAt)}`,
+        onOpen:()=>{libraryView='components';openedLibraryProjectId=item.id;renderLibrary();},
+        onRename:()=>showEntityModal({title:'Renomear projeto',name:item.name,hideId:true}, ({name})=>{libraryStore.renameProject(item.id,name);renderLibrary();}),
+        onExport:()=>downloadText(`${item.id}.uiproject`, JSON.stringify(libraryStore.exportProject(item.id),null,2)),
+        onDelete:()=>{if(confirm(`Excluir o projeto “${item.name}” e seus componentes?`)){libraryStore.deleteProject(item.id);renderLibrary();}}
+      }));
+      else content.appendChild(libraryRow({ title:item.name, id:item.id, meta:`Atualizado ${formatDate(item.updatedAt)}`,
+        onOpen:()=>loadComponentRecord(openedLibraryProjectId,item.id),
+        onRename:()=>showEntityModal({title:'Renomear componente',name:item.name,hideId:true}, ({name})=>{libraryStore.saveComponent(openedLibraryProjectId,{...item,name});renderLibrary();}),
+        onDuplicate:()=>{let id=`${item.id}-copia`,n=2;while(libraryStore.getComponent(openedLibraryProjectId,id))id=`${item.id}-copia-${n++}`;libraryStore.saveComponent(openedLibraryProjectId,{...item,id,name:`${item.name} (cópia)`});renderLibrary();},
+        onExport:()=>downloadText(`${item.id}.uicomp`,JSON.stringify(componentEnvelope(item),null,2)),
+        onDelete:()=>{if(confirm(`Excluir o componente “${item.name}”?`)){libraryStore.deleteComponent(openedLibraryProjectId,item.id);renderLibrary();}}
+      }));
+    });
+  }
+  function showLibrary() { if (currentProjectId && currentComponentId) persist(false); $('#app').classList.add('hidden'); $('#libraryScreen').classList.remove('hidden'); libraryView='projects'; openedLibraryProjectId=null; renderLibrary(); }
+  $('#libraryBtn').addEventListener('click', showLibrary);
+  $('#libraryBackBtn').addEventListener('click',()=>{libraryView='projects';openedLibraryProjectId=null;renderLibrary();});
+  $('#libraryPrimaryBtn').addEventListener('click',()=>{
+    if (libraryView==='projects') showEntityModal({title:'Novo projeto',help:'Agrupe aqui componentes relacionados.',name:'',id:''}, ({name,id})=>{const project=libraryStore.createProject({name,id});libraryView='components';openedLibraryProjectId=project.id;renderLibrary();});
+    else showEntityModal({title:'Novo componente',help:'O ID técnico permanece estável; o nome pode mudar depois.',name:'',id:''}, ({name,id})=>makeBlankComponent(openedLibraryProjectId,id,name));
+  });
+  $('#importProjectBtn').addEventListener('click',()=> (libraryView==='projects' ? $('#importProjectFile') : $('#importComponentFile')).click());
+  $('#importProjectFile').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;try{const payload=JSON.parse(await file.text());const existing=libraryStore.hasProject(payload?.project?.id);if(existing&&!confirm('Já existe um projeto com este ID. Importar como cópia?'))return;libraryStore.importProject(payload,existing?'copy':'replace');renderLibrary();}catch(error){alert(error.message||'Arquivo de projeto inválido.');}finally{event.target.value='';}});
+  $('#importComponentFile').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file||!openedLibraryProjectId)return;try{const payload=JSON.parse(await file.text());if(payload?.format!=='ui-builder-component')throw new Error('Arquivo de componente inválido.');const item=payload.component||{};const manifest=payload.files?.['component.json']||item.componentManifest||{};let id=manifest.id||item.id;if(libraryStore.getComponent(openedLibraryProjectId,id)){if(!confirm('Já existe um componente com este ID. Importar como cópia?'))return;let n=2,base=id;while(libraryStore.getComponent(openedLibraryProjectId,`${base}-${n}`))n++;id=`${base}-${n}`;}libraryStore.saveComponent(openedLibraryProjectId,{...item,id,name:manifest.name||item.name||id,componentManifest:{...manifest,id},componentHtml:payload.files?.['component.html']||item.componentHtml||'',componentCss:payload.files?.['component.css']||item.componentCss||''});renderLibrary();}catch(error){alert(error.message||'Arquivo de componente inválido.');}finally{event.target.value='';}});
+
+  function newInstanceId(componentId) { return `${componentId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`; }
+  function insertComponentInstance(component) {
+    const parent = targetContainer();
+    const html = component.componentHtml || '<div></div>';
+    const added = parent.components().add(html);
+    const instance = Array.isArray(added) ? added[0] : added;
+    if (!instance) throw new Error('Não foi possível inserir o componente.');
+    instance.addAttributes({'data-component': component.id, 'data-instance': newInstanceId(component.id)});
+    if (component.componentCss) editor.addStyle(component.componentCss);
+    editor.select(instance); switchTab('style'); schedulePersist(); renderLayers();
+  }
+  function openComponentPicker() {
+    const list = $('#componentPickerList'); list.innerHTML = '';
+    const entries = currentProjectId ? libraryStore.listComponents(currentProjectId).filter(item => item.id !== currentComponentId) : [];
+    if (!entries.length) { list.innerHTML = '<p class="library-empty">Crie outro componente neste projeto para inseri-lo como instância.</p>'; }
+    entries.forEach(item => list.appendChild(libraryRow({ title:item.name, id:item.id, meta:'Definição reutilizável', onOpen:()=>{ $('#componentPickerModal').classList.add('hidden'); insertComponentInstance(item); } })));
+    $('#componentPickerModal').classList.remove('hidden');
+  }
+  $('#insertProjectComponent').addEventListener('click', openComponentPicker);
+  $('#closeComponentPicker').addEventListener('click',()=>$('#componentPickerModal').classList.add('hidden'));
+
   loadProject();
+  libraryStore.migrateLegacy({ project: editor.getProjectData(), activePageId: editor.Pages.getSelected()?.get('id') || null, importedHeadExtras });
+  showLibrary();
 
   const addTemplates = {
     'container-v': `<div class="ui-container" data-ui="container-v" style="display:flex;flex-direction:column;gap:12px;width:100%;min-height:100px;padding:12px;border:1px dashed #3a3a3c;border-radius:16px"></div>`,
@@ -476,9 +643,9 @@
           `<span class="layer-icon">${iconFor(child)}</span>` +
           '<span class="layer-name"></span>' +
           '<span class="layer-kind"></span>';
-        selectButton.querySelector('.layer-name').textContent = labelFor(child);
+        selectButton.querySelector('.layer-name').textContent = attrs['data-name'] || labelFor(child);
 
-        const kind = layerKind(child);
+        const kind = attrs['data-element'] || attrs['data-component'] || layerKind(child) || attrs['data-ui'] || '';
         const kindEl = selectButton.querySelector('.layer-kind');
         kindEl.textContent = kind;
         kindEl.classList.toggle('hidden', !kind);
@@ -519,7 +686,8 @@
     const v = style[key];
     if (v !== undefined && v !== '') return String(v);
     const el = cmp.view?.el;
-    if (el && getComputedStyle(el)[key]) return getComputedStyle(el)[key];
+    const computed = el?.ownerDocument.defaultView.getComputedStyle(el);
+    if (computed && computed[key]) return computed[key];
     return fallback;
   }
 
@@ -534,6 +702,116 @@
     schedulePersist();
   }
 
+  function clearSelection() {
+    editor.select(null);
+    selected = null;
+    refreshInspector();
+    renderLayers();
+  }
+
+  // Use a completed tap, not touchstart: pan and pinch must keep the selection.
+  function bindBlankSelection(target, frameWindow = null) {
+    if (!target || target.__blankSelectionBound) return;
+    target.__blankSelectionBound = true;
+    const pointers = new Set();
+    let tap = null;
+    const isBlank = element => {
+      if (!element?.closest) return false;
+      if (frameWindow) {
+        return element === frameWindow.document.body ||
+          element === frameWindow.document.documentElement ||
+          element.classList.contains('page-root');
+      }
+      if (element.closest('.device-toolbar, button, input, select, textarea')) return false;
+      return element.matches('.workspace, .device-stage, #gjs, .gjs-cv-canvas, .gjs-cv-canvas__frames');
+    };
+    target.addEventListener('pointerdown', event => {
+      pointers.add(event.pointerId);
+      if (pointers.size !== 1 || event.button !== 0) { tap = null; return; }
+      tap = isBlank(event.target) ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+    }, true);
+    target.addEventListener('pointermove', event => {
+      if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 4) tap = null;
+    }, true);
+    target.addEventListener('pointerup', event => {
+      const clear = tap?.id === event.pointerId && isBlank(event.target);
+      pointers.delete(event.pointerId);
+      tap = null;
+      // GrapesJS can select the wrapper in the same event; clear after its handlers.
+      if (clear && !previewing) setTimeout(clearSelection, 0);
+    }, true);
+    target.addEventListener('pointercancel', event => {
+      pointers.delete(event.pointerId);
+      tap = null;
+    }, true);
+    target.addEventListener('click', event => {
+      if (event.detail === 0 && isBlank(event.target) && !previewing) clearSelection();
+    });
+  }
+
+  let precisionStep = 1;
+  const precisionFields = {
+    widthValue: ['width', 0], heightValue: ['height', 0], gapValue: ['gap', 0],
+    xValue: ['left', -Infinity], yValue: ['top', -Infinity],
+    paddingValue: ['padding', 0], marginValue: ['margin', -Infinity],
+    borderWidthValue: ['border-width', 0], radiusValue: ['border-radius', 0]
+  };
+
+  function stepPrecisionField(id, direction) {
+    if (!selected) return;
+    const [property, minimum] = precisionFields[id];
+    const el = selected.view?.el;
+    const computed = el?.ownerDocument.defaultView.getComputedStyle(el);
+    let value = computed?.getPropertyValue(property) || safeStyle(selected, property, '0px');
+    const offset = property === 'left' || property === 'top';
+    if (offset && (value === 'auto' || computed?.position === 'static')) value = '0px';
+    if (!/^-?\d+(?:\.\d+)?(?:px)?$/.test(value.trim())) {
+      flash('Digite um valor em px antes de ajustar');
+      return;
+    }
+    const next = Math.max(minimum, Math.round((parseFloat(value) + direction * precisionStep) * 1000) / 1000);
+    const patch = { [property]: `${next}px` };
+    if (offset && safeStyle(selected, 'position', 'static') === 'static') patch.position = 'relative';
+    if (property === 'border-width') patch['border-style'] = 'solid';
+    setStylePatch(patch);
+    refreshInspector();
+  }
+
+  Object.keys(precisionFields).forEach(id => {
+    const input = $('#' + id);
+    const oldField = input.parentElement;
+    // Buttons inside a label can focus its input and open the iPhone keyboard.
+    const field = document.createElement('div');
+    [...oldField.attributes].forEach(attribute => field.setAttribute(attribute.name, attribute.value));
+    while (oldField.firstChild) field.appendChild(oldField.firstChild);
+    oldField.replaceWith(field);
+    const title = field.querySelector('span').textContent;
+    input.setAttribute('aria-label', title + ' em pixels');
+    const controls = document.createElement('div');
+    controls.className = 'precision-control';
+    input.before(controls);
+    [-1, 1].forEach(direction => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = direction < 0 ? '−' : '+';
+      button.setAttribute('aria-label', (direction < 0 ? 'Diminuir ' : 'Aumentar ') + title);
+      button.addEventListener('pointerdown', event => event.preventDefault());
+      button.addEventListener('click', () => stepPrecisionField(id, direction));
+      if (direction < 0) controls.appendChild(button);
+      else { controls.appendChild(input); controls.appendChild(button); }
+    });
+  });
+  $('#precisionStep').addEventListener('click', event => {
+    const button = event.target.closest('button[data-step]');
+    if (!button) return;
+    precisionStep = Number(button.dataset.step);
+    all('#precisionStep button').forEach(item => {
+      const active = item === button;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-pressed', String(active));
+    });
+  });
+
   function refreshInspector() {
     const empty = $('#inspectorEmpty');
     const inspector = $('#inspector');
@@ -543,8 +821,13 @@
       return;
     }
     empty.classList.add('hidden'); inspector.classList.remove('hidden');
-    $('#selectedLabel').textContent = labelFor(selected);
+    $('#selectedLabel').textContent = selected.getAttributes?.()?.['data-name'] || labelFor(selected);
     const attrs = selected.getAttributes?.() || {};
+    const componentId = attrs['data-component'] || currentComponentId || '';
+    const elementId = attrs['data-element'] || '';
+    $('#friendlyNameValue').value = attrs['data-name'] || '';
+    $('#elementIdValue').value = elementId;
+    $('#identityInfo').textContent = `${attrs['data-component'] ? 'Componente' : elementId ? 'Elemento' : 'Elemento semântico pendente'} · data-ui: ${attrs['data-ui'] || '—'} · ${componentId ? `${componentId}${elementId ? ` > ${elementId}` : ''}` : 'sem componente'}`;
     const ui = attrs['data-ui'];
     const tag = String(selected.get?.('tagName') || '').toLowerCase();
     const isText = ui === 'text' || ui === 'button' || ['p','span','a','button','label','li','h1','h2','h3','h4','h5','h6'].includes(tag);
@@ -559,6 +842,8 @@
     $('#widthValueWrap').classList.toggle('hidden', mode !== 'fixed');
     $('#widthValue').value = numeric(width, 300);
     $('#heightValue').value = safeStyle(selected,'height','auto').replace('px','');
+    $('#xValue').value = numeric(safeStyle(selected, 'left', '0'), 0);
+    $('#yValue').value = numeric(safeStyle(selected, 'top', '0'), 0);
     $('#gapValue').value = numeric(safeStyle(selected,'gap','0'),0);
     $('#paddingValue').value = numeric(safeStyle(selected,'padding','0'),0);
     $('#marginValue').value = numeric(safeStyle(selected,'margin','0'),0);
@@ -605,6 +890,47 @@
   });
 
   $('#textValue').addEventListener('input', e => { if(selected){ selected.components(e.target.value); schedulePersist(); renderLayers(); }});
+  $('#friendlyNameValue').addEventListener('change', event => {
+    if (!selected) return;
+    const value = event.target.value.trim();
+    if (value) selected.addAttributes({'data-name': value}); else selected.removeAttributes('data-name');
+    schedulePersist(); refreshInspector(); renderLayers();
+  });
+  $('#elementIdValue').addEventListener('change', event => {
+    if (!selected) return;
+    const value = window.UiLibraryStore.cleanId(event.target.value);
+    if (value) selected.addAttributes({'data-element': value}); else selected.removeAttributes('data-element');
+    schedulePersist(); refreshInspector(); renderLayers();
+  });
+  function copyText(text, success) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => flash(success)).catch(() => { flash('Não foi possível copiar'); });
+  }
+  $('#copyIdBtn').addEventListener('click', () => copyText(selected?.getAttributes?.()?.['data-element'] || selected?.getAttributes?.()?.['data-component'] || '', 'ID copiado'));
+  $('#copyReferenceBtn').addEventListener('click', () => {
+    const attrs = selected?.getAttributes?.() || {}; copyText(`${attrs['data-component'] || currentComponentId || ''}${attrs['data-element'] ? ` > ${attrs['data-element']}` : ''}`, 'Referência copiada');
+  });
+  $('#createComponentBtn').addEventListener('click', () => {
+    if (!selected || !currentProjectId) { flash('Abra um projeto primeiro'); return; }
+    const source = selected;
+    showEntityModal({ title:'Criar componente', help:'Será criada uma definição independente a partir da seleção.', name: source.getAttributes?.()?.['data-name'] || labelFor(source), id:'' }, ({name,id}) => {
+      if (libraryStore.getComponent(currentProjectId, window.UiLibraryStore.cleanId(id || name))) throw new Error('Já existe um componente com esse ID.');
+      const componentId = window.UiLibraryStore.cleanId(id || name);
+      // data-ui continues to describe the generic element type; this is its semantic component identity.
+      source.addAttributes({'data-component': componentId});
+      const sourceHtml = source.toHTML?.() || '';
+      const document = { project: editor.getProjectData(), activePageId: editor.Pages.getSelected()?.get('id') || null, importedHeadExtras };
+      const saved = libraryStore.saveComponent(currentProjectId, { id:componentId, name, document, importedHeadExtras });
+      saved.componentHtml = sourceHtml; saved.componentCss = editor.getCss(); saved.componentManifest = {formatVersion:1,id:componentId,name,elements:identityRows()};
+      libraryStore.saveComponent(currentProjectId, saved); schedulePersist(); renderLayers(); flash('Componente criado');
+    });
+  });
+  ['xValue', 'yValue'].forEach(id => $('#' + id).addEventListener('input', event => {
+    if (!selected || !event.target.value.trim() || !Number.isFinite(Number(event.target.value))) return;
+    const patch = { [precisionFields[id][0]]: `${Number(event.target.value)}px` };
+    if (safeStyle(selected, 'position', 'static') === 'static') patch.position = 'relative';
+    setStylePatch(patch);
+  }));
   $('#widthValue').addEventListener('input', e => setStylePatch({width:`${Number(e.target.value)||0}px`}));
   $('#heightValue').addEventListener('change', e => { const v=e.target.value.trim(); setStylePatch({height: (!v || v==='auto')?'auto':/^\d+(\.\d+)?$/.test(v)?`${v}px`:v}); });
   $('#gapValue').addEventListener('input', e => setStylePatch({gap:`${Number(e.target.value)||0}px`}));
@@ -646,8 +972,8 @@
   editor.on('component:deselected', () => { selected=null; refreshInspector(); renderLayers(); });
   editor.on('update', schedulePersist);
 
-  $('#undoBtn').addEventListener('click',()=>editor.UndoManager.undo());
-  $('#redoBtn').addEventListener('click',()=>editor.UndoManager.redo());
+  $('#undoBtn').addEventListener('click',()=>{ editor.UndoManager.undo(); refreshInspector(); renderLayers(); });
+  $('#redoBtn').addEventListener('click',()=>{ editor.UndoManager.redo(); refreshInspector(); renderLayers(); });
   $('#refreshLayers').addEventListener('click',renderLayers);
 
   function clampZoom(value) {
@@ -838,11 +1164,13 @@
   function bindCanvasGestures(frameWindow) {
     const workspace = $('.workspace');
     bindGestureTarget(workspace, window);
+    bindBlankSelection(workspace);
 
     if (!frameWindow || frameWindow.__uiBuilderGestureBound) return;
     frameWindow.__uiBuilderGestureBound = true;
 
     const doc = frameWindow.document;
+    bindBlankSelection(doc, frameWindow);
     if (doc.documentElement) {
       doc.documentElement.style.touchAction = 'none';
       doc.documentElement.style.overscrollBehavior = 'none';
@@ -1230,5 +1558,4 @@ ${body}
 
   flash('Editor pronto');
 
-  if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{})); }
 })();
