@@ -4,6 +4,7 @@
   const LIBRARY_KEY = 'ui-builder-library-v1';
   const PROJECT_KEY = id => `ui-builder-project-v1:${id}`;
   const LEGACY_KEY = 'mobile-ui-builder-project-v1';
+  const RECOVERY_KEY = 'ui-builder-library-recovery-v1';
   const now = () => new Date().toISOString();
   const cleanId = value => String(value || '').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -11,6 +12,9 @@
   const clone = value => JSON.parse(JSON.stringify(value));
 
   class LocalLibraryStore {
+    constructor() { this.listeners = new Set(); }
+    subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+    changed(reason) { this.listeners.forEach(listener => { try { listener(reason); } catch (_) {} }); }
     readLibrary() {
       try {
         const value = JSON.parse(localStorage.getItem(LIBRARY_KEY) || '');
@@ -33,6 +37,7 @@
       const index = library.projects.findIndex(item => item.id === project.id);
       if (index === -1) library.projects.push(summary); else library.projects[index] = summary;
       this.writeLibrary(library);
+      this.changed('project-saved');
       return clone(project);
     }
     createProject({ id, name }) {
@@ -52,6 +57,7 @@
       localStorage.removeItem(PROJECT_KEY(id));
       library.projects = library.projects.filter(item => item.id !== id);
       this.writeLibrary(library);
+      this.changed('project-deleted');
     }
     listComponents(projectId) { return this.getProject(projectId)?.components || []; }
     getComponent(projectId, componentId) {
@@ -106,6 +112,45 @@
       }
       const stamp = now(); incoming.createdAt ||= stamp;
       return this.saveProject(incoming);
+    }
+    createLibrarySnapshot() {
+      const library = this.readLibrary();
+      const projects = library.projects.map(summary => this.getProject(summary.id)).filter(Boolean).map(clone);
+      const componentCount = projects.reduce((count, project) => count + (project.components?.length || 0), 0);
+      return {
+        format: 'ui-builder-library-backup', formatVersion: 1, createdAt: now(),
+        library: { version: 1, projects },
+        metadata: { projectCount: projects.length, componentCount }
+      };
+    }
+    validateLibrarySnapshot(snapshot) {
+      if (snapshot?.format !== 'ui-builder-library-backup' || snapshot.formatVersion !== 1) throw new Error('Backup da Biblioteca inválido.');
+      if (!Array.isArray(snapshot.library?.projects)) throw new Error('Projetos ausentes no backup.');
+      const ids = new Set();
+      snapshot.library.projects.forEach(project => {
+        if (!project?.id || !Array.isArray(project.components) || ids.has(project.id)) throw new Error('Estrutura de projetos inválida.');
+        ids.add(project.id);
+      });
+      return true;
+    }
+    getRecoverySnapshot() {
+      try { return JSON.parse(localStorage.getItem(RECOVERY_KEY) || ''); } catch (_) { return null; }
+    }
+    restoreLibrarySnapshot(snapshot) {
+      this.validateLibrarySnapshot(snapshot);
+      const current = this.createLibrarySnapshot();
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify(current));
+      const previous = this.readLibrary();
+      previous.projects.forEach(project => localStorage.removeItem(PROJECT_KEY(project.id)));
+      const nextIndex = { version: 1, projects: [] };
+      snapshot.library.projects.forEach(rawProject => {
+        const project = clone(rawProject);
+        localStorage.setItem(PROJECT_KEY(project.id), JSON.stringify(project));
+        nextIndex.projects.push({ id: project.id, name: project.name, createdAt: project.createdAt || snapshot.createdAt, updatedAt: project.updatedAt || snapshot.createdAt });
+      });
+      this.writeLibrary(nextIndex);
+      this.changed('library-restored');
+      return { recovery: current, restored: this.createLibrarySnapshot() };
     }
   }
 
