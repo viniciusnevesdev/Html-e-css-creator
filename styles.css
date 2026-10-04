@@ -1,4 +1,4 @@
-:root{
+:root{--icon-ui-size:24px;--icon-close-size:24px;--icon-info-size:18px;--icon-tab-size:24px;
   color-scheme:dark;
   --bg:#0b0b0d;
   --surface:#161618;
@@ -106,3 +106,9 @@ button{color:inherit}
 .library-import-btn{border:0;background:transparent;color:var(--accent);font-size:12px;font-weight:650;padding:7px 2px}
 .library-projects-section .library-content{flex:1}
 .backup-card{background:var(--surface-2);border-color:transparent}
+
+/* Biblioteca de ícones substituíveis em assets/icons */
+.ui-icon{width:var(--icon-ui-size);height:var(--icon-ui-size);display:block;object-fit:contain}
+.panel-close-icon,.modal-close-icon{width:var(--icon-close-size);height:var(--icon-close-size)}
+.tab-ui-icon{width:var(--icon-tab-size);height:var(--icon-tab-size)}
+.info-btn img{width:var(--icon-info-size);height:var(--icon-info-size);display:block}
