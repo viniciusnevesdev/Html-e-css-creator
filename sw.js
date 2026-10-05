@@ -17,7 +17,7 @@ const LOCAL=['./','./index.html','./styles.css','./library-store.js','./app.js',
 ];
 
 self.addEventListener('install',e=>{
-  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(LOCAL)).then(()=>self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(LOCAL.map(url=>new Request(url,{cache:'reload'})))).then(()=>self.skipWaiting()));
 });
 
 self.addEventListener('activate',e=>{
