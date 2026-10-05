@@ -1626,6 +1626,111 @@
     setTimeout(() => $('#importCode')?.focus(), 50);
   }
 
+  const PUBLISHED_GITHUB_OWNER = 'viniciusnevesdev';
+
+  function setPublishedImportStatus(message='',kind=''){
+    const status=$('#publishedImportStatus');
+    if(!status)return;
+    status.textContent=message;
+    status.className=`published-import-status${kind ? ` ${kind}` : ''}`;
+  }
+  function openPublishedImportModal(){
+    const modal=$('#publishedImportModal');
+    if(!modal)return;
+    $('#publishedAppUrl').value='';
+    setPublishedImportStatus('');
+    modal.classList.remove('hidden');
+    setTimeout(()=>$('#publishedAppUrl')?.focus(),50);
+  }
+  function closePublishedImportModal(){$('#publishedImportModal')?.classList.add('hidden');}
+  function parseOwnedGithubPagesUrl(value){
+    const pageUrl=new URL(String(value||'').trim());
+    const host=`${PUBLISHED_GITHUB_OWNER}.github.io`;
+    if(pageUrl.hostname!==host)throw new Error(`Use um link publicado em ${host}.`);
+    const segments=pageUrl.pathname.split('/').filter(Boolean);
+    const repo=segments.shift();
+    if(!repo)throw new Error('O link precisa incluir o nome do repositório.');
+    const relativePath=segments.length?segments.join('/'):'index.html';
+    const rootPath=`/${repo}/`;
+    return {pageUrl:new URL(relativePath,`https://${host}/${repo}/`),pageOrigin:`https://${host}`,rootPath,rawBase:`https://raw.githubusercontent.com/${PUBLISHED_GITHUB_OWNER}/${repo}/main/`};
+  }
+  function rawUrlForPublishedAsset(value,source){
+    const target=new URL(value,source.pageUrl);
+    if(target.origin!==source.pageOrigin||!target.pathname.startsWith(source.rootPath))return target.href;
+    const path=target.pathname.slice(source.rootPath.length)||'index.html';
+    return `${source.rawBase}${path}`;
+  }
+  async function fetchPublishedText(url){
+    const response=await fetch(url,{cache:'no-store'});
+    if(!response.ok)throw new Error(`Não foi possível baixar ${new URL(url).pathname}.`);
+    return response.text();
+  }
+  function absolutizeSnapshotAssets(root,source){
+    root.querySelectorAll('[src]').forEach(node=>{
+      const value=node.getAttribute('src');
+      if(!value||value.startsWith('data:'))return;
+      try{node.setAttribute('src',new URL(value,source.pageUrl).href);}catch(_){}
+    });
+    root.querySelectorAll('a[href]').forEach(node=>{
+      const value=node.getAttribute('href');
+      if(!value||value.startsWith('#')||value.startsWith('mailto:')||value.startsWith('tel:'))return;
+      try{node.setAttribute('href',new URL(value,source.pageUrl).href);}catch(_){}
+    });
+  }
+  function absolutizeCssAssets(css,source){
+    return String(css||'').replace(/url\(\s*(['"]?)(?!data:|https?:|#)([^'")]+)\1\s*\)/gi,(_,quote,path)=>{
+      try{return `url(${quote}${new URL(path,source.pageUrl).href}${quote})`;}catch(error){return _;}
+    });
+  }
+  async function createPublishedAppSnapshot(value){
+    const source=parseOwnedGithubPagesUrl(value);
+    const sourceHtml=await fetchPublishedText(rawUrlForPublishedAsset(source.pageUrl.href,source));
+    const documentSource=new DOMParser().parseFromString(sourceHtml,'text/html');
+    const stylesheetUrls=[...documentSource.querySelectorAll('link[rel="stylesheet"][href]')].map(link=>rawUrlForPublishedAsset(link.getAttribute('href'),source));
+    const styles=(await Promise.all(stylesheetUrls.map(fetchPublishedText))).map(item=>absolutizeCssAssets(item,source)).join('\n\n');
+    const scriptSources=[];
+    for(const script of documentSource.querySelectorAll('script')){
+      if(script.src){
+        const raw=rawUrlForPublishedAsset(script.getAttribute('src'),source);
+        if(raw.startsWith(source.rawBase))scriptSources.push(await fetchPublishedText(raw));
+      }else if(script.textContent?.trim())scriptSources.push(script.textContent);
+    }
+    documentSource.querySelectorAll('script,link[rel="stylesheet"],link[rel="manifest"],base').forEach(node=>node.remove());
+    absolutizeSnapshotAssets(documentSource.body,source);
+    const frame=document.createElement('iframe');
+    frame.setAttribute('aria-hidden','true');
+    frame.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px;border:0';
+    document.body.appendChild(frame);
+    const scripts=scriptSources.map(code=>'<script>'+code.replaceAll('</script','<\\/script')+'</script>').join('\n');
+    const frameHtml='<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>'+styles+'</style></head><body>'+documentSource.body.innerHTML+scripts+'</body></html>';
+    try{
+      await new Promise((resolve,reject)=>{
+        const timeout=setTimeout(()=>reject(new Error('O app demorou demais para abrir.')),7000);
+        frame.onload=()=>setTimeout(()=>{clearTimeout(timeout);resolve();},450);
+        frame.srcdoc=frameHtml;
+      });
+      const snapshot=frame.contentDocument?.body?.cloneNode(true);
+      if(!snapshot)throw new Error('Não foi possível ler a tela carregada.');
+      snapshot.querySelectorAll('script').forEach(node=>node.remove());
+      return {html:snapshot.innerHTML,css:styles};
+    }finally{frame.remove();}
+  }
+  function applyPublishedAppSnapshot(snapshot){
+    const page=editor.Pages.getSelected();
+    const root=page?.getMainComponent?.();
+    if(!root)throw new Error('Página atual indisponível.');
+    root.components(snapshot.html);
+    editor.setStyle(snapshot.css);
+    importedHeadExtras='';
+    selected=null;
+    migrateUiAttributes();
+    refreshInspector();
+    renderLayers();
+    renderPages();
+    persist(false);
+    requestAnimationFrame(()=>{editor.refresh();syncCanvasSize();});
+  }
+
   function exportCss(){ return editor.getCss(); }
 
   function exportHtmlDocument() {
@@ -1650,6 +1755,26 @@ ${body}
 
   $('#importBtn')?.addEventListener('click', openImportModal);
   $('#closeImport')?.addEventListener('click', closeImportModal);
+
+  $('#importPublishedBtn')?.addEventListener('click',openPublishedImportModal);
+  $('#closePublishedImport')?.addEventListener('click',closePublishedImportModal);
+  $('#cancelPublishedImport')?.addEventListener('click',closePublishedImportModal);
+  $('#applyPublishedImport')?.addEventListener('click',async()=>{
+    const button=$('#applyPublishedImport');
+    const value=$('#publishedAppUrl')?.value?.trim()||'';
+    if(!value){setPublishedImportStatus('Cole o link do app publicado primeiro.','error');return;}
+    button.disabled=true;
+    setPublishedImportStatus('Carregando o app e criando a cópia editável…','loading');
+    try{
+      const snapshot=await createPublishedAppSnapshot(value);
+      applyPublishedAppSnapshot(snapshot);
+      closePublishedImportModal();
+      flash('Cópia visual do app importada para edição');
+    }catch(error){
+      console.error(error);
+      setPublishedImportStatus(error?.message||'Não foi possível importar este app.','error');
+    }finally{button.disabled=false;}
+  });
 
   all('.import-tabs button').forEach(button => {
     button.addEventListener('click', () => setImportMode(button.dataset.importTab));
