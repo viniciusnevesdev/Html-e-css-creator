@@ -1226,7 +1226,7 @@
       }
 
       const point = outerTouchPoint(event.touches[0], sourceWindow);
-      if(interactionMode!=='navigate'){mode=null;startPoint=null;lastPoint=null;return;}
+      // Toque curto seleciona; ao deslocar o dedo, o canvas volta a navegar em qualquer modo.
       mode = 'pan'; startPoint = point; lastPoint = point;
     };
 
