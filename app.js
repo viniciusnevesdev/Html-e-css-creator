@@ -30,6 +30,14 @@
       if (documentSvg.nodeName.toLowerCase() !== 'svg') return;
 
       const svg = document.importNode(documentSvg, true);
+      if (img.dataset.iconColor !== 'preserve') {
+        svg.querySelectorAll('[fill],[stroke]').forEach(part => {
+          ['fill', 'stroke'].forEach(property => {
+            const value = part.getAttribute(property);
+            if (value && value !== 'none') part.setAttribute(property, 'currentColor');
+          });
+        });
+      }
       [...img.attributes].forEach(attribute => {
         if (attribute.name !== 'src' && attribute.name !== 'alt') svg.setAttribute(attribute.name, attribute.value);
       });
