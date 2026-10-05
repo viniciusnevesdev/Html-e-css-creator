@@ -546,6 +546,10 @@
     'text': `<div class="ui-text" data-ui="text" style="font-size:20px">Texto</div>`,
     'button': `<div class="ui-button" data-ui="button">Botão</div>`,
     'image': `<div class="ui-image" data-ui="image">Imagem</div>`,
+    'shape-rectangle': `<div class="ui-shape" data-ui="shape" data-shape="rectangle" style="width:160px;height:100px;background:#0a84ff;border-radius:0;flex:0 0 auto"></div>`,
+    'shape-rounded': `<div class="ui-shape" data-ui="shape" data-shape="rounded-rectangle" style="width:160px;height:100px;background:#0a84ff;border-radius:24px;flex:0 0 auto"></div>`,
+    'shape-circle': `<div class="ui-shape" data-ui="shape" data-shape="circle" style="width:120px;height:120px;background:#0a84ff;border-radius:50%;flex:0 0 auto"></div>`,
+    'shape-ellipse': `<div class="ui-shape" data-ui="shape" data-shape="ellipse" style="width:160px;height:100px;background:#0a84ff;border-radius:50%;flex:0 0 auto"></div>`,
     'spacer': `<div class="ui-spacer" data-ui="spacer"></div>`,
     'divider': `<div class="ui-divider" data-ui="divider"></div>`
   };
@@ -661,7 +665,7 @@
     const type = attrs?.['data-ui'];
     const map = {
       'container-v':'Stack vertical','container-h':'Stack horizontal','overlay':'Sobreposição',
-      'text':'Texto','button':'Botão','image':'Imagem','spacer':'Spacer','divider':'Divisor'
+      'text':'Texto','button':'Botão','image':'Imagem','shape':({rectangle:'Retângulo','rounded-rectangle':'Retângulo arredondado',circle:'Círculo',ellipse:'Elipse'}[attrs['data-shape']] || 'Forma'),'spacer':'Spacer','divider':'Divisor'
     };
     if (map[type]) {
       if (type === 'text' || type === 'button') {
@@ -678,7 +682,8 @@
   const HORIZONTAL_DIRECTION_ICON = VERTICAL_DIRECTION_ICON.replace('vertical-direction-icon', 'horizontal-direction-icon');
 
   function iconFor(cmp) {
-    const t = cmp.getAttributes?.()?.['data-ui'];
+    const attrs = cmp.getAttributes?.() || {};
+    const t = attrs['data-ui'];
     return ({
       'container-v':VERTICAL_DIRECTION_ICON,
       'container-h':HORIZONTAL_DIRECTION_ICON,
@@ -686,6 +691,7 @@
       'text':'Aa',
       'button':'▭',
       'image':'▧',
+      'shape':({rectangle:'▭','rounded-rectangle':'▢',circle:'●',ellipse:'⬭'}[attrs['data-shape']] || '●'),
       'spacer':VERTICAL_DIRECTION_ICON,
       'divider':'—'
     })[t] || '□';
