@@ -112,3 +112,14 @@ button{color:inherit}
 .panel-close-icon,.modal-close-icon{width:var(--icon-close-size);height:var(--icon-close-size)}
 .tab-ui-icon{width:var(--icon-tab-size);height:var(--icon-tab-size)}
 .info-btn img{width:var(--icon-info-size);height:var(--icon-info-size);display:block}
+
+/* Importação explícita de apps publicados */
+.published-import-card{height:auto;min-height:390px}
+.published-import-field{grid-column:1/-1}
+.published-import-field input{font-size:13px}
+.published-import-status{min-height:18px;margin:0;color:var(--muted);font-size:12px;line-height:1.35}
+.published-import-status.error{color:#ff6961}
+.published-import-status.loading{color:var(--accent)}
+.published-import-actions{margin-top:auto}
+#applyPublishedImport{background:var(--accent);color:#fff;font-weight:700}
+#applyPublishedImport:disabled{opacity:.55}
