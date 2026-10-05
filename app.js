@@ -7,6 +7,52 @@
   let lastUpdateCheck = 0;
   const $ = (s) => document.querySelector(s);
   const all = (s) => [...document.querySelectorAll(s)];
+  const iconSourceCache = new Map();
+
+  async function inlineIcon(img) {
+    if (!img?.isConnected || img.dataset.iconInlined === 'true') return;
+    const source = img.getAttribute('src') || '';
+    if (!source.includes('assets/icons/') || !source.toLowerCase().includes('.svg')) return;
+
+    const url = new URL(source, window.location.href).href;
+    try {
+      if (!iconSourceCache.has(url)) {
+        iconSourceCache.set(url, fetch(url).then(response => {
+          if (!response.ok) throw new Error(`Ícone indisponível: ${url}`);
+          return response.text();
+        }));
+      }
+
+      const markup = await iconSourceCache.get(url);
+      if (!img.isConnected) return;
+
+      const documentSvg = new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement;
+      if (documentSvg.nodeName.toLowerCase() !== 'svg') return;
+
+      const svg = document.importNode(documentSvg, true);
+      [...img.attributes].forEach(attribute => {
+        if (attribute.name !== 'src' && attribute.name !== 'alt') svg.setAttribute(attribute.name, attribute.value);
+      });
+      svg.dataset.iconInlined = 'true';
+      svg.setAttribute('focusable', 'false');
+      if (!svg.hasAttribute('aria-hidden')) svg.setAttribute('aria-hidden', 'true');
+      img.replaceWith(svg);
+    } catch (error) {
+      console.debug('Não foi possível aplicar a cor semântica ao ícone.', error);
+    }
+  }
+
+  function inlineIcons(root = document) {
+    if (root instanceof Element && root.matches?.('img[src*="assets/icons/"]')) inlineIcon(root);
+    root.querySelectorAll?.('img[src*="assets/icons/"]').forEach(inlineIcon);
+  }
+
+  inlineIcons();
+  new MutationObserver(records => {
+    records.forEach(record => record.addedNodes.forEach(node => {
+      if (node.nodeType === Node.ELEMENT_NODE) inlineIcons(node);
+    }));
+  }).observe(document.body, { childList: true, subtree: true });
   let selected = null;
   let exportMode = 'html';
   let saveTimer = null;
