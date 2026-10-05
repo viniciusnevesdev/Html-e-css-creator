@@ -164,6 +164,7 @@
           <div class="section-title">Projeto</div>
           <div class="action-row">
             <button id="importBtn">Importar código</button>
+            <button id="importPublishedBtn">Importar app publicado</button>
             <button id="saveBtn">Salvar local</button>
             <button id="resetBtn" class="danger-soft">Limpar projeto</button>
           </div>
@@ -203,6 +204,20 @@
       <div class="action-row import-actions">
         <label class="file-import-btn">Escolher arquivo<input id="importFile" type="file" accept=".html,.htm,.css,text/html,text/css" /></label>
         <button id="applyImport">Importar e editar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="publishedImportModal">
+    <div class="modal-card published-import-card">
+      <div class="modal-head"><h2>Importar app publicado</h2><button class="icon-btn" id="closePublishedImport" aria-label="Fechar"><img class="ui-icon modal-close-icon" src="./assets/icons/close.svg" alt="" aria-hidden="true"></button></div>
+      <p class="import-help">Cole o link publicado de um app da sua conta no GitHub Pages. O editor abre o app uma vez, cria uma cópia visual editável e não altera o app original.</p>
+      <label class="field published-import-field"><span>Link do app publicado</span><input id="publishedAppUrl" type="url" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="https://viniciusnevesdev.github.io/nome-do-app/" /></label>
+      <p class="import-help">Nesta primeira versão, funciona com apps publicados em <strong>viniciusnevesdev.github.io</strong>. Elementos gerados pelo JavaScript entram como uma cópia visual; depois da importação, eles não executam ações dentro do editor.</p>
+      <p class="published-import-status" id="publishedImportStatus" aria-live="polite"></p>
+      <div class="action-row published-import-actions">
+        <button id="cancelPublishedImport" type="button">Cancelar</button>
+        <button id="applyPublishedImport" type="button">Carregar cópia editável</button>
       </div>
     </div>
   </div>
